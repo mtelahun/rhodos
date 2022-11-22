@@ -14,3 +14,8 @@ name = "rhodus"
 path = "src/bin/bin.rs"
 
 [dependencies]
+docopt = "1"
+serde = { version = "1", features = ["derive"] }
+slog = "2.7.0"
+slog-async = "2.7.0"
+slog-term = "2.7.0"
