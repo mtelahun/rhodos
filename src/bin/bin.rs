@@ -8,7 +8,7 @@ use slog::{Drain, Level, Logger};
 use slog::{info, o};
 
 const USAGE: &'static str = "
-Usage: rhodus [options]
+Usage: rhodos [options]
 
 Options: -h, --help             Show this usage screen.
          -v, --version          Show version.
@@ -49,5 +49,5 @@ fn main() {
         o!("version" => env!("CARGO_PKG_VERSION")),
     );
 
-    info!(logger, "rhodus Started");
+    info!(logger, "Application Started");
 }
