@@ -14,7 +14,10 @@ name = "rhodos"
 path = "src/bin/bin.rs"
 
 [dependencies]
+chrono = "~0.4"
+diesel = { version = "2.0.0", features = ["chrono", "postgres"] }
 docopt = "1"
+dotenvy = "0.15"
 serde = { version = "1", features = ["derive"] }
 slog = "2.7.0"
 slog-async = "2.7.0"
