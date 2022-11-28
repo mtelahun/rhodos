@@ -1,57 +1,68 @@
-use diesel::PgConnection;
-use diesel::prelude::*;
-use dotenvy::dotenv;
-use std::env;
+use chrono;
+use sea_orm::{DatabaseConnection, Database, DbErr};
+use slog::{Logger, debug, info};
 
-pub mod models;
-pub mod schema;
+pub async fn connect(
+    url: &String,
+    logger: &Logger
+) -> Result<DatabaseConnection, DbErr> {
 
-const ENV_DBURL: &'static str = "DATABASE_URL";
-
-pub fn connect() -> PgConnection {
-    dotenv().ok();
-
-    let db_url: String = env::var(ENV_DBURL)
-        .expect("Missing environment variable DATABSE_URL");
-    PgConnection::establish(&db_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
+    let db = match Database::connect(url).await {
+        Ok(db) => { db },
+        Err(e) => { 
+            info!(logger, "Unable to connect to database {}", url);
+            return Err(e) 
+        }
+    };
+    debug!(logger, "Connected to {}", url);
+    Ok(db)
 }
 
-pub fn browse_content(conn: &mut PgConnection, limit: i32) -> Vec<models::Content> {
-    use schema::content::dsl::*;
+pub mod content {
+    use sea_orm::{DatabaseConnection, EntityTrait, ActiveModelTrait};
+    use super::super::entities::{prelude::*, *};
 
-    let mut lim: i32 = limit;
-    if lim < 0 || lim > 500 {
-        lim = 0;
+    pub async fn browse(
+        db: &DatabaseConnection, 
+        id: i64) -> Result<Vec<content::Model>, String> {
+            let res = match Content::find_by_id(id).one(db)
+                .await {
+                    Ok(res) => { vec![res.unwrap()] },
+                    Err(e) => { return Err(e.to_string()) }
+                };
+
+            Ok(res)
     }
-    content.filter(published.eq(true))
-        .limit(i64::from(lim))
-        .load::<models::Content>(conn)
-        .expect("Error loading content")
 
-}
+    pub async fn create(
+        db: &DatabaseConnection,
+        new_content: content::ActiveModel
+    ) -> Result<i64, String> {
 
-pub fn create_content(
-    conn: &mut PgConnection, new_content: &models::NewContent
-) -> models::Content {
-    use schema::content;
+        let res = match Content::insert(new_content).exec(db)
+            .await {
+                Ok(insert_result) => { insert_result.last_insert_id },
+                Err(e) => { return Err(e.to_string()) }
+            };
+        
+        Ok(res)
+    }
 
-    diesel::insert_into(content::table)
-        .values(new_content)
-        .get_result(conn)
-        .expect("Error saving new post")
-}
+    pub async fn publish(
+        db: &DatabaseConnection,
+        id: i64
+    ) -> Result<bool, String> {
 
-pub fn publish_content(conn: &mut PgConnection, id: i64) -> models::Content {
-    use schema::content::dsl::{content, published};
-    diesel::update(content.find(id))
-        .set(published.eq(true))
-        .get_result::<models::Content>(conn)
-        .unwrap()
-}
+        let cnt = content::ActiveModel {
+            id: sea_orm::ActiveValue::Set(id),
+            published: sea_orm::ActiveValue::Set(Some(true)),
+            published_at: sea_orm::ActiveValue::Set(Some(chrono::Utc::now().naive_utc())),
+            ..Default::default()
+        };
+        match cnt.update(db).await {
+            Ok(_) => { Ok(true) },
+            Err(e) => { return Err(e.to_string()) }
+        }
+    }
 
-pub fn delete_content(conn: &mut PgConnection, del_id: i64) -> Result<usize, diesel::result::Error> {
-    use schema::content::dsl::*;
-    diesel::delete(content.filter(id.eq(del_id)))
-        .execute(conn)
 }
