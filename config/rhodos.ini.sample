@@ -1,0 +1,11 @@
+[server]
+hostname = "localhost"
+port = 5000
+log_level = "info"
+
+[database]
+db_host =
+db_port = 5432
+db_user =
+db_password =
+db_name = "rhodos"
