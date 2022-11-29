@@ -1,15 +1,14 @@
-use sea_orm::{Database, DbBackend, Statement, ConnectionTrait, ConnectOptions, DatabaseConnection};
+use sea_orm::{Database, DbBackend, Statement, ConnectionTrait, DatabaseConnection};
 use sea_orm_migration::prelude::*;
 use slog::{
     Logger,
     debug,
     info,
 };
-use std::time::Duration;
 
 use super::migrator::Migrator;
 
-pub async fn init(
+pub async fn init<'a>(
     server_url: &String,
     db_name: &String,
     logger: &Logger
@@ -24,11 +23,9 @@ pub async fn init(
             ))
             .await?;
 
-            let mut opt =
-                ConnectOptions::new(format!("{}/{}", server_url, db_name).into()).to_owned();
-            opt.connect_timeout(Duration::from_secs(5));
-            debug!(logger, "Attempting connection to: {}", opt.get_url());
-            Database::connect(opt)
+            let url = format!("{}/{}", server_url, db_name);
+            debug!(logger, "Attempting connection to: {}", url);
+            Database::connect(url)
                 .await?;
             debug!(logger, "Connection succeeded!");
         }

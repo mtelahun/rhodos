@@ -60,15 +60,3 @@ CREATE TABLE content (
             }
     }
 }
-
-#[derive(Iden)]
-pub enum Content {
-    Table,
-    Id,
-    Publisher,
-    Cw,
-    Body,
-    Published,
-    PublishedAt,
-    UpdatedAt
-}

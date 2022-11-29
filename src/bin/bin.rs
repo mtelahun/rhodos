@@ -2,7 +2,6 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
-use async_std::task;
 use docopt::Docopt;
 use dotenvy::dotenv;
 use serde::Deserialize;
@@ -13,6 +12,7 @@ use std::process::ExitCode;
 
 use librhodos::migration;
 use librhodos::db;
+use librhodos::run;
 
 const ENV_DBHOST: &'static str = "DB_HOST";
 const ENV_DBNAME: &'static str = "DB_NAME";
@@ -37,7 +37,8 @@ struct Args {
 #[derive(Debug, Deserialize)]
 enum LogLevel { Crit, Error, Warning, Info, Debug }
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
 
     dotenv().ok();
     let mut user_part = "".to_string();
@@ -47,7 +48,7 @@ fn main() -> ExitCode {
         Err(err)=> { 
             eprintln!("DB_NAME: {}", err.to_string());
             return ExitCode::FAILURE;
-    }
+        }
     };
     let db_host = env::var(ENV_DBHOST).or_else(|err| return Err(err)).unwrap();
     let db_user = env::var(ENV_DBUSER).or_else(|err| return Err(err)).unwrap();
@@ -56,10 +57,10 @@ fn main() -> ExitCode {
         user_part = format!("{}:{}", db_user, db_pass);
     }
     if db_host.len() > 0 {
-        host_part = format!("@{}", db_host);
+        host_part = format!("@{}", db_host).to_string();
     }
     let server_url = format!("postgres://{}{}", user_part, host_part);
-    let db_url = format!("{}/{}", server_url, db_name).to_string();
+    let db_url = format!("{}/{}", server_url, db_name);
 
     // Process command line arguments
     let args: Args = Docopt::new(USAGE)
@@ -87,7 +88,7 @@ fn main() -> ExitCode {
 
     if args.flag_init_db.is_some() {
         // Initialize DB
-        let _res = match task::block_on(migration::init(&server_url, &db_name, &logger)) {
+        let _res = match migration::init(&server_url, &db_name, &logger).await {
             Ok(_) => { },
             Err(err) => {
                 eprintln!("Initialization of {} failed: {}", db_name, err.to_string());
@@ -96,15 +97,15 @@ fn main() -> ExitCode {
         };
 
         // Migrate DB
-        let db = match task::block_on(db::connect(&db_url, &logger)) {
+        let db = match db::connect(&db_url, &logger).await {
             Ok(d) => { d },
             Err(e) => {
                 eprintln!("Unable to connect to {}: {}", db_url, e.to_string());
                 return ExitCode::FAILURE
             }
         };
-        match task::block_on(migration::migrate(&db, &logger)) {
-            Ok(()) => { },
+        match migration::migrate(&db, &logger).await {
+            Ok(_) => { },
             Err(e) => {
                 eprintln!("Migration of {} failed: {}", db_name, e.to_string());
                 return ExitCode::FAILURE
@@ -113,6 +114,7 @@ fn main() -> ExitCode {
     }
 
     info!(logger, "Application Started");
+    run(&db_url, &logger).await;
 
     return ExitCode::SUCCESS
 }

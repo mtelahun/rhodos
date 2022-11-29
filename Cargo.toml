@@ -14,14 +14,16 @@ name = "rhodos"
 path = "src/bin/bin.rs"
 
 [dependencies]
-async-std = "1.12.0"
+axum = { version = "0.6.0", features = ["headers"] }
 chrono = "~0.4"
 docopt = "1"
 dotenvy = "0.15"
 futures = "0.3.25"
-sea-orm = { version = "0.10.4", features = ["sqlx-postgres", "runtime-async-std-native-tls"] }
+sea-orm = { version = "0.10.4", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
 sea-orm-migration = "0.10.4"
 serde = { version = "1", features = ["derive"] }
 slog = "2.7.0"
 slog-async = "2.7.0"
 slog-term = "2.7.0"
+tokio = { version = "1.22.0", features = ["full", "rt-multi-thread"] }
+validator = "0.16.0"
