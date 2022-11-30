@@ -49,7 +49,7 @@ CREATE TABLE content (
 
     // Define how to rollback this migration
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = "DROP TABLE ACCOUNT;";
+        let sql = "DROP TABLE content;";
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager
             .get_connection()

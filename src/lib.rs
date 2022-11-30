@@ -1,4 +1,4 @@
-use sea_orm::Database;
+use settings::Settings;
 use slog::{Logger, info};
 
 pub mod settings;
@@ -8,14 +8,9 @@ pub mod migration;
 pub mod migrator;
 mod routes;
 
-pub async fn run(db_url: &str, logger: &Logger) -> Result<(), String> {
-    let db = match Database::connect(db_url)
-        .await {
-            Ok(conn) => conn,
-            Err(e) => return Err(e.to_string()),
-        };
+pub async fn run(db_url: &str, logger: &Logger, global_config: &Settings) -> Result<(), String> {
 
-    let app = routes::create_routes(db);
+    let app = routes::create_routes(db_url, global_config).await;
 
     let listen_addr = "0.0.0.0:5000";
     info!(logger, "Listening on {}", listen_addr);
@@ -26,6 +21,8 @@ pub async fn run(db_url: &str, logger: &Logger) -> Result<(), String> {
 
     Ok(())
 }
+
+
 
 #[cfg(test)]
 mod tests {

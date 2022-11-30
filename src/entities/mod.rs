@@ -4,3 +4,5 @@ pub mod prelude;
 
 pub mod account;
 pub mod content;
+pub mod instance;
+pub mod microblog;

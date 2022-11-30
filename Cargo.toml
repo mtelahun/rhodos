@@ -15,6 +15,7 @@ path = "src/bin/bin.rs"
 
 [dependencies]
 axum = { version = "0.6.0", features = ["headers"] }
+axum-macros = "0.3.0"
 chrono = "~0.4"
 config = "0.13.2"
 docopt = "1"

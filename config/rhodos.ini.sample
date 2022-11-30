@@ -1,5 +1,5 @@
 [server]
-hostname = "localhost"
+domain = "localhost"
 port = 5000
 log_level = "info"
 

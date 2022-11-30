@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
-    pub hostname: String,
+    pub domain: String,
     pub port: u16,
     pub log_level: String,
 }
