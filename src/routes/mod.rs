@@ -4,17 +4,20 @@ use axum::{
     routing::get,
     Router, Extension, http::StatusCode
 };
+use axum_login::{AuthLayer, RequireAuthorizationLayer};
 use sea_orm::{DatabaseConnection, EntityTrait, ColumnTrait, QueryFilter, Database};
-
-pub mod index;
-pub mod test;
-
-use index::index;
-use test::proxy;
 use tokio::sync::RwLock;
-
 use crate::{entities::instance, settings::Settings};
 use crate::entities::prelude::*;
+
+// Routes
+pub mod index;
+pub mod test;
+pub mod xauth;
+pub mod axum_login_user;
+use index::index;
+use test::proxy;
+use axum_login_user::{login_handler, logout_handler};
 
 #[derive(Clone)]
 pub struct TenantData {
@@ -38,6 +41,17 @@ pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
                 process::exit(1)
             },
         };
+
+
+    // Setup our authentication
+    let secret = "not so secret".as_bytes();
+    let user_store = xauth::TestUserStore::new(&db);
+    let auth_layer: AuthLayer<
+        xauth::TestUserStore,
+        xauth::TestUser, 
+        xauth::TestRole
+    > = AuthLayer::new(user_store, &secret);
+
     let shared_state = Arc::new(
         AppState{
             domain: global_config.server.domain.clone(),
@@ -49,6 +63,10 @@ pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/proxy", get(proxy))
+        .route_layer(RequireAuthorizationLayer::<xauth::TestUser>::login())
+        .route("/login", get(login_handler))
+        .route("/logout", get(logout_handler))
+        .layer(auth_layer)
         .layer(Extension(shared_state))
 }
 

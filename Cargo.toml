@@ -14,18 +14,25 @@ name = "rhodos"
 path = "src/bin/bin.rs"
 
 [dependencies]
+argon2 = { version = "0.4.1", features = ["std"] }
+async-trait = "0.1.59"
 axum = { version = "0.6.0", features = ["headers"] }
+axum-login = { version = "0.4.0", features = ["postgres"] }
 axum-macros = "0.3.0"
+axum-sessions = "0.4.1"
 chrono = "~0.4"
 config = "0.13.2"
 docopt = "1"
 dotenvy = "0.15"
+eyre = "0.6.8"
 futures = "0.3.25"
+rand = "0.8.5"
 sea-orm = { version = "0.10.4", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
 sea-orm-migration = "0.10.4"
 serde = { version = "1", features = ["derive"] }
 slog = "2.7.0"
 slog-async = "2.7.0"
 slog-term = "2.7.0"
+sqlx = { version = "0.6.2", features = ["runtime-tokio-rustls"] }
 tokio = { version = "1.22.0", features = ["full", "rt-multi-thread"] }
 validator = "0.16.0"

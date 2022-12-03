@@ -55,6 +55,7 @@ struct DbUri {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+
     let mut global_config: settings::Settings =
         settings::Settings::new().expect("unable to load global_configuration");
 

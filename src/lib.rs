@@ -1,6 +1,7 @@
-use settings::Settings;
 use slog::{Logger, info};
+use settings::Settings;
 
+pub mod auth;
 pub mod settings;
 pub mod db;
 pub mod entities;
