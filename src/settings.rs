@@ -28,14 +28,13 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
-        let env = std::env::var("RHODOS_ENV")
-            .unwrap_or_else(|_| "Prod".into());
+        let env = std::env::var("RHODOS_ENV").unwrap_or_else(|_| "Prod".into());
         let mut config_path = CONFIG_FILE_PATH.to_string();
         if env != "Prod" {
             config_path = format!("{}-{}.toml", CONFIG_FILE_PREFIX, env);
         }
         let builder = Config::builder()
-            .set_default("env", env.clone())?
+            .set_default("env", env)?
             .set_default("server.port", "8080")?
             .set_default("server.log_level", "info")?
             .set_default("database.db_host", "")?
@@ -47,7 +46,7 @@ impl Settings {
             .add_source(File::with_name(&config_path).required(false))
             .add_source(Environment::with_prefix("rhodos").separator("_"))
             .build()?;
-        
+
         builder.try_deserialize()
     }
 }

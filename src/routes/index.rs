@@ -1,1 +1,3 @@
-pub async fn index() -> String { "hello world".to_string() }
+pub async fn index() -> String {
+    "hello world".to_string()
+}

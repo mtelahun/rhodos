@@ -1,15 +1,14 @@
 use settings::Settings;
-use slog::{Logger, info};
+use slog::{info, Logger};
 
-pub mod settings;
 pub mod db;
 pub mod entities;
 pub mod migration;
 pub mod migrator;
 mod routes;
+pub mod settings;
 
 pub async fn run(db_url: &str, logger: &Logger, global_config: &Settings) -> Result<(), String> {
-
     let app = routes::create_routes(db_url, global_config).await;
 
     let listen_addr = "0.0.0.0:5000";
@@ -22,9 +21,5 @@ pub async fn run(db_url: &str, logger: &Logger, global_config: &Settings) -> Res
     Ok(())
 }
 
-
-
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}
