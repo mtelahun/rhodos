@@ -75,7 +75,6 @@ impl Env {
 }
 
 impl TryFrom<String> for Env {
-
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -83,7 +82,7 @@ impl TryFrom<String> for Env {
             "dev" => Ok(Self::Dev),
             "test" => Ok(Self::Test),
             "prod" => Ok(Self::Prod),
-            other => Err(format!("{} is not a supported environment", other))
+            other => Err(format!("{} is not a supported environment", other)),
         }
     }
 }
