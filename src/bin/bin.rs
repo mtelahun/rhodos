@@ -5,7 +5,7 @@ extern crate slog_term;
 use docopt::Docopt;
 use dotenvy::dotenv;
 use serde::Deserialize;
-use slog::{info, o};
+use slog::{info, o, debug};
 use slog::{Drain, Level, Logger};
 use std::env;
 use std::process::ExitCode;
@@ -55,12 +55,15 @@ struct DbUri {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let mut global_config: settings::Settings =
-        settings::Settings::new().expect("unable to load global_configuration");
+    let mut global_config = settings::Settings::new().map_err(|e| {
+        eprintln!("Failed to get settings: {}", e.to_string());
+        return ExitCode::FAILURE
+    })
+    .unwrap();
 
     let db_name = global_config.database.db_name.to_string();
     let db_host = global_config.database.db_host.to_string();
-    let db_port = global_config.database.db_host.to_string();
+    let db_port = global_config.database.db_port.to_string();
     let mut db_user = global_config.database.db_user.to_string();
     let mut db_pass = global_config.database.db_password.to_string();
 
@@ -139,6 +142,7 @@ async fn main() -> ExitCode {
     );
 
     if args.flag_init_db.is_some() {
+        info!(logger, "Database initialization started");
         let mut uri_list: Vec<DbUri> = vec![];
         if args.flag_database.is_empty() {
             uri_list.push(DbUri {
@@ -162,6 +166,7 @@ async fn main() -> ExitCode {
 
         for uri in uri_list {
             // Initialize DB
+            debug!(logger, "Initializing database: {}/{}", uri.path, uri.db_name);
             match migration::init(&uri.path, &uri.db_name, &logger).await {
                 Ok(_) => {}
                 Err(err) => {
@@ -191,6 +196,7 @@ async fn main() -> ExitCode {
     }
 
     info!(logger, "Application Started");
+    debug!(logger, "database url: {}", db_url);
     let res = run(&db_url, &logger, &global_config).await;
     if let Err(e) = res {
         eprintln!("{}", e);
