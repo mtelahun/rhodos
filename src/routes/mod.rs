@@ -1,11 +1,12 @@
-use std::{collections::HashMap, process, sync::Arc};
-
 use axum::{http::StatusCode, routing::get, Extension, Router};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
+use std::{collections::HashMap, sync::Arc};
 
+pub mod health_check;
 pub mod index;
 pub mod test;
 
+use health_check::health_check;
 use index::index;
 use test::proxy;
 use tokio::sync::RwLock;
@@ -25,15 +26,14 @@ pub struct AppState {
     host_db_map: Arc<RwLock<HashMap<String, TenantData>>>,
 }
 
-pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
+pub async fn create_routes(db_url: &str, global_config: &Settings) -> Result<Router, String> {
     let db = match Database::connect(db_url).await {
         Ok(conn) => conn,
-        Err(_) => {
-            eprintln!(
-                "unable to connect to database {}",
-                global_config.database.db_name
-            );
-            process::exit(1)
+        Err(e) => {
+            return Err(format!(
+                "create_routes: unable to connect to database {}: {}",
+                global_config.database.db_name, e,
+            ))
         }
     };
     let shared_state = Arc::new(AppState {
@@ -42,10 +42,13 @@ pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
         host_db_map: Arc::new(RwLock::new(HashMap::new())),
     });
 
-    Router::new()
+    let router = Router::new()
         .route("/", get(index))
+        .route("/health_check", get(health_check))
         .route("/proxy", get(proxy))
-        .layer(Extension(shared_state))
+        .layer(Extension(shared_state));
+
+    Ok(router)
 }
 
 pub async fn get_db_from_host(

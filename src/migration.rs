@@ -2,7 +2,15 @@ use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statemen
 use sea_orm_migration::prelude::*;
 use slog::{debug, info, Logger};
 
+use super::db;
 use super::migrator::Migrator;
+
+#[derive(Debug)]
+pub struct DbUri {
+    pub full: String,
+    pub path: String,
+    pub db_name: String,
+}
 
 pub async fn init<'a>(server_url: &String, db_name: &String, logger: &Logger) -> Result<(), DbErr> {
     let db = Database::connect(server_url).await?;
@@ -33,5 +41,31 @@ pub async fn migrate(db: &DatabaseConnection, logger: &Logger) -> Result<(), DbE
     let schema_manager = SchemaManager::new(db);
     assert!(schema_manager.has_table("account").await?);
 
+    Ok(())
+}
+
+pub async fn initialize_and_migrate_database(uri: &DbUri, logger: &Logger) -> Result<(), String> {
+    // Initialize DB
+    debug!(
+        logger,
+        "Initializing database: {}/{}", uri.path, uri.db_name
+    );
+
+    let _ = init(&uri.path, &uri.db_name, logger).await.map_err(|e| {
+        Err::<(), std::string::String>(format!("Initialization of {} failed: {}", uri.db_name, e))
+    });
+
+    // Migrate DB
+    let db_conn = db::connect(&uri.full, logger)
+        .await
+        .map_err(|e| {
+            Err::<(), std::string::String>(format!("Unable to connect to {}: {}", uri.full, e))
+        })
+        .unwrap();
+    let _ = migrate(&db_conn, logger).await.map_err(|e| {
+        Err::<(), std::string::String>(format!("Migration of {} failed: {}", uri.db_name, e))
+    });
+
+    info!(logger, "Database(s) initialization finished");
     Ok(())
 }

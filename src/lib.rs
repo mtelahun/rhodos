@@ -1,25 +1,25 @@
+use axum::Router;
 use settings::Settings;
-use slog::{info, Logger};
+use std::net::TcpListener;
 
 pub mod db;
 pub mod entities;
 pub mod migration;
 pub mod migrator;
-mod routes;
+pub mod routes;
 pub mod settings;
 
-pub async fn run(db_url: &str, logger: &Logger, global_config: &Settings) -> Result<(), String> {
-    let app = routes::create_routes(db_url, global_config).await;
+pub async fn get_router(db_url: &str, global_config: &Settings) -> Result<Router, String> {
+    let app = routes::create_routes(db_url, global_config).await.unwrap();
 
-    let listen_addr = "0.0.0.0:5000";
-    info!(logger, "Listening on {}", listen_addr);
-    axum::Server::bind(&listen_addr.parse().unwrap())
+    Ok(app)
+}
+
+pub async fn serve(app: Router, listener: TcpListener) {
+    axum::Server::from_tcp(listener)
+        .map_err(|e| eprintln!("{}", e))
+        .unwrap()
         .serve(app.into_make_service())
         .await
         .unwrap();
-
-    Ok(())
 }
-
-#[cfg(test)]
-mod tests {}
