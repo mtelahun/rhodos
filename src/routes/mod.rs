@@ -1,10 +1,7 @@
-use std::{sync::{Arc}, collections::HashMap, process};
+use std::{collections::HashMap, process, sync::Arc};
 
-use axum::{
-    routing::get,
-    Router, Extension, http::StatusCode
-};
-use sea_orm::{DatabaseConnection, EntityTrait, ColumnTrait, QueryFilter, Database};
+use axum::{http::StatusCode, routing::get, Extension, Router};
+use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
 
 pub mod index;
 pub mod test;
@@ -13,8 +10,8 @@ use index::index;
 use test::proxy;
 use tokio::sync::RwLock;
 
-use crate::{entities::instance, settings::Settings};
 use crate::entities::prelude::*;
+use crate::{entities::instance, settings::Settings};
 
 #[derive(Clone)]
 pub struct TenantData {
@@ -29,22 +26,21 @@ pub struct AppState {
 }
 
 pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
-
-    let db = match Database::connect(db_url)
-        .await {
-            Ok(conn) => conn,
-            Err(_) => {
-                eprintln!("unable to connect to database {}", global_config.database.db_name);
-                process::exit(1)
-            },
-        };
-    let shared_state = Arc::new(
-        AppState{
-            domain: global_config.server.domain.clone(),
-            rhodos_db: Some(db), 
-            host_db_map: Arc::new(RwLock::new(HashMap::new())) 
+    let db = match Database::connect(db_url).await {
+        Ok(conn) => conn,
+        Err(_) => {
+            eprintln!(
+                "unable to connect to database {}",
+                global_config.database.db_name
+            );
+            process::exit(1)
         }
-    );
+    };
+    let shared_state = Arc::new(AppState {
+        domain: global_config.server.domain.clone(),
+        rhodos_db: Some(db),
+        host_db_map: Arc::new(RwLock::new(HashMap::new())),
+    });
 
     Router::new()
         .route("/", get(index))
@@ -53,27 +49,25 @@ pub async fn create_routes(db_url: &str, global_config: &Settings) -> Router {
 }
 
 pub async fn get_db_from_host(
-    host: &String, 
-    state: &Arc<AppState>
+    host: &str,
+    state: &Arc<AppState>,
 ) -> Result<DatabaseConnection, StatusCode> {
-
-    let split = host.split(':');
+    let mut split = host.split(':');
     let mut key = "".to_string();
-    for i in split {
+    if let Some(i) = split.next() {
         key = i.to_string();
-        break;
     }
 
     if key == state.domain {
         if let Some(dbconn) = &state.rhodos_db {
             println!("This is the main DB!");
-            return Ok(dbconn.clone())
+            return Ok(dbconn.clone());
         }
     }
-    let res = map_get(&key, &state).await;
+    let res = map_get(&key, state).await;
     match res {
-        Ok(td) => return Ok(td.db),
-        Err(e) => return Err(e),
+        Ok(td) => Ok(td.db),
+        Err(e) => Err(e),
     }
 }
 
@@ -91,7 +85,7 @@ async fn map_get(
 
         if let Some(value) = found_tenant {
             println!("found key: {}", value.domain);
-            return Ok(value.clone())
+            return Ok(value.clone());
         }
     }
     println!("did NOT find key: {}", key);
@@ -101,20 +95,17 @@ async fn map_get(
             .filter(instance::Column::Domain.eq(key.clone()))
             .one(db)
             .await;
-        if let Ok(opt) = instance {
-            if let Some(inst) = opt {
-                let db_url = make_db_uri(&inst);
-                let res = map_set(&inst.domain, &db_url, &state).await;
-                if let Ok(td) = res {
-                    
-                    return Ok(td)
-                }
+        if let Ok(Some(inst)) = instance {
+            let db_url = make_db_uri(&inst);
+            let res = map_set(&inst.domain, &db_url, state).await;
+            if let Ok(td) = res {
+                return Ok(td);
             }
         }
     } else {
-        return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-     
+
     Err(StatusCode::NOT_FOUND)
 }
 
@@ -124,24 +115,29 @@ async fn map_set(
     state: &Arc<AppState>,
 ) -> Result<TenantData, String> {
     println!("in map_set(): db_url = {}", db_url);
-    let db = match Database::connect(db_url)
-        .await {
-            Ok(conn) => conn,
-            Err(e) => return Err(e.to_string()),
-        };
+    let db = match Database::connect(db_url).await {
+        Ok(conn) => conn,
+        Err(e) => return Err(e.to_string()),
+    };
 
     println!("found tenant: {}", domain);
-    let td = TenantData{ domain: domain.clone(), db: db };
+    let td = TenantData {
+        domain: domain.clone(),
+        db,
+    };
 
     println!("inserting...");
-    let _ = &state.host_db_map.write().await.insert(domain.clone(), td.clone());
+    let _ = &state
+        .host_db_map
+        .write()
+        .await
+        .insert(domain.clone(), td.clone());
     println!("insert done");
 
     Ok(td)
 }
 
 fn make_db_uri(inst: &instance::Model) -> String {
-
     println!("in make_db_uri()");
     let mut db_host: String = "".to_string();
     let mut db_port: u16 = 0;
@@ -156,7 +152,7 @@ fn make_db_uri(inst: &instance::Model) -> String {
     if let Some(dpa) = inst.db_password.clone() {
         db_pass = dpa;
     }
-    if db_user.len() > 0 {
+    if !db_user.is_empty() {
         user_part = format!("{}:{}", db_user, db_pass);
     }
 
@@ -166,8 +162,8 @@ fn make_db_uri(inst: &instance::Model) -> String {
     if let Some(dpo) = inst.db_port {
         db_port = dpo as u16;
     }
-    if db_host.len() > 0 {
-        if user_part.len() > 0 {
+    if !db_host.is_empty() {
+        if !user_part.is_empty() {
             host_part = "@".to_string();
         }
         host_part = format!("{}{}", host_part, db_host);
@@ -176,9 +172,12 @@ fn make_db_uri(inst: &instance::Model) -> String {
         }
     }
 
-
-    let res = format!("postgres://{}{}/{}", user_part, host_part, inst.db_name.clone());
+    let res = format!(
+        "postgres://{}{}/{}",
+        user_part,
+        host_part,
+        inst.db_name.clone()
+    );
     println!("db_uri = {}", res);
     res
-
 }
