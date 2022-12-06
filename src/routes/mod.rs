@@ -10,6 +10,7 @@ use health_check::health_check;
 use index::index;
 use test::proxy;
 use tokio::sync::RwLock;
+use tower_http::trace::TraceLayer;
 
 use crate::entities::prelude::*;
 use crate::{entities::instance, settings::Settings};
@@ -46,6 +47,7 @@ pub async fn create_routes(db_url: &str, global_config: &Settings) -> Result<Rou
         .route("/", get(index))
         .route("/health_check", get(health_check))
         .route("/proxy", get(proxy))
+        .layer(TraceLayer::new_for_http())
         .layer(Extension(shared_state));
 
     Ok(router)

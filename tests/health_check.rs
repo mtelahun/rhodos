@@ -1,14 +1,25 @@
+use once_cell::sync::Lazy;
 use std::net::TcpListener;
 
+use librhodos::telemetry::{get_subscriber, init_subscriber};
 use librhodos::{
     migration::{self, DbUri},
     serve, settings,
 };
-use slog::{o, Drain, Level, Logger};
+use secrecy::Secret;
 
-extern crate slog;
-extern crate slog_async;
-extern crate slog_term;
+// Ensure that the `tracing` stack is only initialized once
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "test=debug,tower_http=debug".to_string();
+    let subscriber_name = "test".to_string();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        init_subscriber(subscriber);
+    }
+});
 
 #[tokio::test]
 async fn health_check_works() {
@@ -29,6 +40,9 @@ async fn health_check_works() {
 }
 
 async fn spawn_app() -> String {
+    // Initialize tracing stack
+    Lazy::force(&TRACING);
+
     let global_config = settings::Settings::new()
         .map_err(|e| {
             eprintln!("Failed to get settings: {}", e.to_string());
@@ -37,23 +51,14 @@ async fn spawn_app() -> String {
         .unwrap();
     let db_name = global_config.database.db_name.to_string();
     let db_uri = DbUri {
-        full: format!("postgres://postgres:password@localhost:5432/{}", db_name),
-        path: "postgres://postgres:password@localhost:5432".to_string(),
+        full: Secret::from(format!(
+            "postgres://postgres:password@localhost:5432/{}",
+            db_name
+        )),
+        path: Secret::from("postgres://postgres:password@localhost:5432".to_string()),
         db_name: db_name,
     };
-    // Create a drain hierarchy
-    let decorator = slog_term::TermDecorator::new().build();
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    // Get root logger
-    let logger: Logger = Logger::root(
-        drain.filter_level(Level::Debug).fuse(),
-        o!(
-            "version" => env!("CARGO_PKG_VERSION"),
-            "env" => global_config.env.to_string(),
-        ),
-    );
-    let _ = migration::initialize_and_migrate_database(&db_uri, &logger)
+    let _ = migration::initialize_and_migrate_database(&db_uri)
         .await
         .map_err(|err_str| {
             eprintln!("{}", err_str);

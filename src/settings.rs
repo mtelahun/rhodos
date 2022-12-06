@@ -1,7 +1,10 @@
-use std::fmt;
-
 use config::{Config, ConfigError, Environment, File};
+use dotenvy::dotenv;
+use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
+use std::{env, fmt};
+
+use super::APP_NAME;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
@@ -15,8 +18,28 @@ pub struct Database {
     pub db_host: String,
     pub db_port: u16,
     pub db_user: String,
-    pub db_password: String,
+    pub db_password: Secret<String>,
     pub db_name: String,
+}
+
+impl Database {
+    pub fn connection_string(&self) -> Secret<String> {
+        Secret::from(format!(
+            "{}/{}",
+            self.connection_string_no_db().expose_secret(),
+            self.db_name
+        ))
+    }
+
+    pub fn connection_string_no_db(&self) -> Secret<String> {
+        Secret::from(format!(
+            "postgres://{}:{}@{}:{}",
+            self.db_user,
+            self.db_password.expose_secret(),
+            self.db_host,
+            self.db_port
+        ))
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -26,7 +49,6 @@ pub struct Settings {
     pub env: Env,
 }
 
-const APP: &str = "rhodos";
 const CONFIG_PREFIX: &str = "config";
 
 impl Settings {
@@ -37,7 +59,7 @@ impl Settings {
             .expect("Failed to parse the APP_ENV environment variable");
         let base_path = std::env::current_dir().expect("Failed to determine current directory");
         let config_dir = base_path.join(CONFIG_PREFIX);
-        let config_path = config_dir.join(APP);
+        let config_path = config_dir.join(APP_NAME);
         let env_config_path = config_dir.join(env.as_str());
         let builder = Config::builder()
             .set_default("env", env.as_str())?
@@ -50,7 +72,7 @@ impl Settings {
             .set_default("database.db_name", "prod")?
             .add_source(File::from(config_path))
             .add_source(File::from(env_config_path).required(false))
-            .add_source(Environment::with_prefix(APP).separator("__"))
+            .add_source(Environment::with_prefix(APP_NAME).separator("__"))
             .build()?;
 
         builder.try_deserialize()
@@ -94,5 +116,16 @@ impl fmt::Display for Env {
             Env::Test => write!(f, "Test"),
             Env::Prod => write!(f, "Prod"),
         }
+    }
+}
+
+const ENV_DBPASS: &str = "DB_PASSWORD";
+
+pub fn override_db_password(global_config: &mut Settings) {
+    // Get database password from .env
+    dotenv().ok();
+
+    if env::var(ENV_DBPASS).is_ok() && !env::var(ENV_DBPASS).unwrap().is_empty() {
+        global_config.database.db_password = Secret::from(env::var(ENV_DBPASS).unwrap());
     }
 }
