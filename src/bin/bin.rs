@@ -22,7 +22,6 @@ Usage: rhodos [options]
 Options: -d --database URI      URI of database to initialize
          -h, --help             Show this usage screen.
          -i, --init-db          Initialize database
-         -l, --log-level=<crit,error,warning,info,debug>  Set log-level filter.
          -m, --migration        Migrate database
          -v, --version          Show version.
 ";
@@ -31,16 +30,6 @@ Options: -d --database URI      URI of database to initialize
 struct Args {
     flag_database: Vec<String>,
     flag_init_db: Option<bool>,
-    flag_log_level: Option<LogLevel>,
-}
-
-#[derive(Debug, Deserialize)]
-enum LogLevel {
-    Crit,
-    Error,
-    Warning,
-    Info,
-    Debug,
 }
 
 #[tokio::main]
@@ -65,30 +54,6 @@ async fn main() -> ExitCode {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
-
-    // Over-ride log-level global_config from command-line
-    let mut tmp = "";
-    let log_level = global_config.server.log_level.to_lowercase().to_owned();
-    match args.flag_log_level {
-        Some(LogLevel::Crit) => tmp = "critical",
-        Some(LogLevel::Error) => tmp = "error",
-        Some(LogLevel::Warning) => tmp = "warning",
-        Some(LogLevel::Info) => tmp = "info",
-        Some(LogLevel::Debug) => tmp = "debug",
-        None => {}
-    };
-    if !tmp.is_empty() && tmp != log_level {
-        global_config.server.log_level = tmp.to_string();
-    };
-
-    // Set log-level for logger
-    let _log_level = global_config
-        .server
-        .log_level
-        .to_string()
-        .to_lowercase()
-        .as_str()
-        .to_owned();
 
     if args.flag_init_db.is_some() {
         tracing::info!("Database initialization started");

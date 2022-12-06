@@ -1,7 +1,6 @@
 [server]
 domain = "localhost"
 port = 5000
-log_level = "info"
 
 [database]
 db_host =
