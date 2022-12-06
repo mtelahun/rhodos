@@ -52,7 +52,7 @@ async fn main() -> ExitCode {
     );
     init_subscriber(subscriber);
 
-    let mut global_config = settings::Settings::new()
+    let mut global_config = settings::Settings::new(None, None)
         .map_err(|e| {
             eprintln!("Failed to get settings: {}", e);
             ExitCode::FAILURE
@@ -135,7 +135,7 @@ async fn main() -> ExitCode {
     }
 
     tracing::info!("Application Started");
-    let router = get_router(&global_config.database.connection_string(), &global_config)
+    let router = get_router(&global_config)
         .await
         .map_err(|e| {
             eprintln!("{}", e);

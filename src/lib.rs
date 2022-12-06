@@ -1,5 +1,4 @@
 use axum::Router;
-use secrecy::{ExposeSecret, Secret};
 use settings::Settings;
 use std::net::TcpListener;
 
@@ -13,13 +12,8 @@ pub mod telemetry;
 
 pub const APP_NAME: &str = "rhodos";
 
-pub async fn get_router(
-    db_url: &Secret<String>,
-    global_config: &Settings,
-) -> Result<Router, String> {
-    let app = routes::create_routes(db_url.expose_secret(), global_config)
-        .await
-        .unwrap();
+pub async fn get_router(global_config: &Settings) -> Result<Router, String> {
+    let app = routes::create_routes(global_config).await.unwrap();
 
     Ok(app)
 }
