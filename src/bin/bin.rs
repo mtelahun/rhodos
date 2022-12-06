@@ -3,20 +3,17 @@ extern crate slog_async;
 extern crate slog_term;
 
 use docopt::Docopt;
-use dotenvy::dotenv;
+use librhodos::telemetry::{get_subscriber, init_subscriber};
+use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
-use slog::{debug, info, o};
-use slog::{Drain, Level, Logger};
-use std::env;
 use std::net::TcpListener;
 use std::process::ExitCode;
 
 use librhodos::migration::{self, DbUri};
-use librhodos::settings;
+use librhodos::settings::{self, override_db_password};
+use librhodos::APP_NAME;
 use librhodos::{get_router, serve};
 
-const ENV_DBUSER: &str = "DB_USER";
-const ENV_DBPASS: &str = "DB_PASSWORD";
 const USAGE: &str = "
 Usage: rhodos [options]
        rhodos [options] [--init-db [--database URI...]]
@@ -48,6 +45,13 @@ enum LogLevel {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    let subscriber = get_subscriber(
+        APP_NAME.into(),
+        "rhodos=info,tower_http=info".into(),
+        std::io::stdout,
+    );
+    init_subscriber(subscriber);
+
     let mut global_config = settings::Settings::new()
         .map_err(|e| {
             eprintln!("Failed to get settings: {}", e);
@@ -55,35 +59,7 @@ async fn main() -> ExitCode {
         })
         .unwrap();
 
-    let db_name = global_config.database.db_name.to_string();
-    let db_host = global_config.database.db_host.to_string();
-    let db_port = global_config.database.db_port.to_string();
-    let mut db_user = global_config.database.db_user.to_string();
-    let mut db_pass = global_config.database.db_password.to_string();
-
-    // Get database username and password from .env
-    dotenv().ok();
-    let mut user_part = "".to_string();
-    let mut host_part = "".to_string();
-
-    // Figure out database uri
-    if !(env::var(ENV_DBUSER).unwrap_or_else(|_| "".to_string())).is_empty() {
-        db_user = env::var(ENV_DBUSER).unwrap();
-    }
-    if !(env::var(ENV_DBPASS).unwrap_or_else(|_| "".to_string())).is_empty() {
-        db_pass = env::var(ENV_DBPASS).unwrap();
-    }
-    if !db_user.is_empty() {
-        user_part = format!("{}:{}", db_user, db_pass);
-    }
-    if !db_host.is_empty() {
-        host_part = format!("@{}", db_host);
-        if !db_port.is_empty() {
-            host_part = format!("{}:{}", host_part, db_port);
-        }
-    }
-    let server_url = format!("postgres://{}{}", user_part, host_part);
-    let db_url = format!("{}/{}", server_url, db_name);
+    override_db_password(&mut global_config);
 
     // Process command line arguments
     let args: Args = Docopt::new(USAGE)
@@ -106,43 +82,33 @@ async fn main() -> ExitCode {
     };
 
     // Set log-level for logger
-    let log_level = global_config
+    let _log_level = global_config
         .server
         .log_level
         .to_string()
         .to_lowercase()
         .as_str()
         .to_owned();
-    let filter_level = match log_level.as_str() {
-        "debug" => Level::Debug,
-        "warning" => Level::Warning,
-        "error" => Level::Error,
-        "critical" => Level::Critical,
-        _ => Level::Info,
-    };
-
-    // Create a drain hierarchy
-    let decorator = slog_term::TermDecorator::new().build();
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-
-    // Get root logger
-    let logger: Logger = Logger::root(
-        drain.filter_level(filter_level).fuse(),
-        o!(
-            "version" => env!("CARGO_PKG_VERSION"),
-            "env" => global_config.env.to_string(),
-        ),
-    );
 
     if args.flag_init_db.is_some() {
-        info!(logger, "Database initialization started");
+        tracing::info!("Database initialization started");
         let mut uri_list: Vec<DbUri> = vec![];
         if args.flag_database.is_empty() {
             uri_list.push(DbUri {
-                full: format!("{}/{}", server_url, db_name),
-                path: server_url.clone(),
-                db_name: db_name.clone(),
+                full: Secret::from(format!(
+                    "{}/{}",
+                    global_config.database.connection_string().expose_secret(),
+                    global_config.database.db_name
+                )),
+                path: Secret::from(format!(
+                    "{}/{}",
+                    global_config
+                        .database
+                        .connection_string_no_db()
+                        .expose_secret(),
+                    global_config.database.db_name
+                )),
+                db_name: global_config.database.db_name.clone(),
             });
         } else {
             for u in args.flag_database {
@@ -151,15 +117,15 @@ async fn main() -> ExitCode {
                 let server_part = vec[0].to_string();
                 let db_part = vec[1].to_string();
                 uri_list.push(DbUri {
-                    full: format!("postgres://{}", u),
-                    path: format!("postgres://{}", server_part),
+                    full: Secret::from(format!("postgres://{}", u)),
+                    path: Secret::from(format!("postgres://{}", server_part)),
                     db_name: db_part,
                 });
             }
         }
 
         for uri in uri_list {
-            let _ = migration::initialize_and_migrate_database(&uri, &logger)
+            let _ = migration::initialize_and_migrate_database(&uri)
                 .await
                 .map_err(|err_str| {
                     eprintln!("{}", err_str);
@@ -168,9 +134,8 @@ async fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    info!(logger, "Application Started");
-    debug!(logger, "database url: {}", db_url);
-    let router = get_router(&db_url, &global_config)
+    tracing::info!("Application Started");
+    let router = get_router(&global_config.database.connection_string(), &global_config)
         .await
         .map_err(|e| {
             eprintln!("{}", e);
@@ -183,6 +148,6 @@ async fn main() -> ExitCode {
         .unwrap();
     tokio::join!(serve(router, listener));
 
-    info!(logger, "Application Stopped");
+    tracing::info!("Application Stopped");
     ExitCode::SUCCESS
 }

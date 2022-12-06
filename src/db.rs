@@ -1,15 +1,14 @@
 use sea_orm::{Database, DatabaseConnection, DbErr};
-use slog::{debug, info, Logger};
 
-pub async fn connect(url: &String, logger: &Logger) -> Result<DatabaseConnection, DbErr> {
+pub async fn connect(url: &String) -> Result<DatabaseConnection, DbErr> {
     let db = match Database::connect(url).await {
         Ok(db) => db,
         Err(e) => {
-            info!(logger, "Unable to connect to database {}", url);
+            tracing::info!("Unable to connect to database {}", url);
             return Err(e);
         }
     };
-    debug!(logger, "Connected to {}", url);
+    tracing::debug!("Connected to {}", url);
     Ok(db)
 }
 
