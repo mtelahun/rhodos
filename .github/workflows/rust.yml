@@ -110,8 +110,8 @@ jobs:
           args: '--ignore-tests'
       
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
-          # token:                ${{secrets.CODECOV_TOKEN}} # not required for public repos
+          token:                f555d459-637e-412c-ab07-9c2045f30df7
           fail_ci_if_error:     true
 
