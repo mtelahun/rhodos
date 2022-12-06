@@ -27,8 +27,8 @@ pub struct AppState {
     host_db_map: Arc<RwLock<HashMap<String, TenantData>>>,
 }
 
-pub async fn create_routes(db_url: &str, global_config: &Settings) -> Result<Router, String> {
-    let db = match Database::connect(db_url).await {
+pub async fn create_routes(global_config: &Settings) -> Result<Router, String> {
+    let db = match Database::connect(global_config.database.connection_options()).await {
         Ok(conn) => conn,
         Err(e) => {
             return Err(format!(

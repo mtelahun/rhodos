@@ -43,20 +43,20 @@ async fn spawn_app() -> String {
     // Initialize tracing stack
     Lazy::force(&TRACING);
 
-    let global_config = settings::Settings::new()
+    let mut global_config = settings::Settings::new(None, None)
         .map_err(|e| {
             eprintln!("Failed to get settings: {}", e.to_string());
             return;
         })
         .unwrap();
-    let db_name = global_config.database.db_name.to_string();
+    global_config.database.db_host = "localhost".to_string();
+    global_config.database.db_port = 5432;
+    global_config.database.db_user = "postgres".to_string();
+    global_config.database.db_password = Secret::from("password".to_string());
     let db_uri = DbUri {
-        full: Secret::from(format!(
-            "postgres://postgres:password@localhost:5432/{}",
-            db_name
-        )),
-        path: Secret::from("postgres://postgres:password@localhost:5432".to_string()),
-        db_name: db_name,
+        full: global_config.database.connection_string(),
+        path: global_config.database.connection_string_no_db(),
+        db_name: global_config.database.db_name.to_string(),
     };
     let _ = migration::initialize_and_migrate_database(&db_uri)
         .await
@@ -65,7 +65,7 @@ async fn spawn_app() -> String {
             return;
         });
 
-    let router = librhodos::get_router(&db_uri.full, &global_config)
+    let router = librhodos::get_router(&global_config)
         .await
         .map_err(|e| {
             eprintln!("{}", e.to_string());

@@ -1,10 +1,23 @@
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
+use sea_orm::ConnectOptions;
 use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
-use std::{env, fmt};
+use std::{env, fmt, path::PathBuf, time::Duration};
+use tracing::log;
 
 use super::APP_NAME;
+
+const ENV_DBPASS: &str = "DB_PASSWORD";
+
+pub fn override_db_password(global_config: &mut Settings) {
+    // Get database password from .env
+    dotenv().ok();
+
+    if env::var(ENV_DBPASS).is_ok() && !env::var(ENV_DBPASS).unwrap().is_empty() {
+        global_config.database.db_password = Secret::from(env::var(ENV_DBPASS).unwrap());
+    }
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
@@ -20,14 +33,61 @@ pub struct Database {
     pub db_user: String,
     pub db_password: Secret<String>,
     pub db_name: String,
+    pub ssl_mode: SslMode,
 }
 
 impl Database {
-    pub fn connection_string(&self) -> Secret<String> {
-        Secret::from(format!(
+    pub fn connection_options(&self) -> ConnectOptions {
+        #[allow(unused_assignments)]
+        let mut ssl = "".to_string();
+        let mut url = self.connection_string_no_db().expose_secret().clone();
+        if self.ssl_mode == SslMode::require {
+            ssl = "?sslmode=require".to_string();
+            url = format!("{}/{}{}", url, self.db_name, ssl);
+        } else {
+            url = format!("{}/{}", url, self.db_name);
+        }
+        let mut opt = ConnectOptions::new(url);
+        self.set_opts(&mut opt);
+
+        opt.to_owned()
+    }
+
+    pub fn connection_options_no_db(&self, include_options: bool) -> ConnectOptions {
+        let mut ssl = "".to_string();
+        if include_options && self.ssl_mode == SslMode::require {
+            ssl = "?sslmode=require".to_string();
+        }
+        let mut opt = ConnectOptions::new(format!(
             "{}/{}",
             self.connection_string_no_db().expose_secret(),
-            self.db_name
+            ssl
+        ));
+        self.set_opts(&mut opt);
+
+        opt.to_owned()
+    }
+
+    fn set_opts(&self, opt: &mut ConnectOptions) {
+        opt.max_connections(100)
+            .min_connections(5)
+            .connect_timeout(Duration::from_secs(8))
+            .idle_timeout(Duration::from_secs(8))
+            .max_lifetime(Duration::from_secs(8))
+            .sqlx_logging(true)
+            .sqlx_logging_level(log::LevelFilter::Info);
+    }
+
+    pub fn connection_string(&self) -> Secret<String> {
+        let mut ssl = "".to_string();
+        if self.ssl_mode == SslMode::require {
+            ssl = "?sslmode=require".to_string();
+        }
+        Secret::from(format!(
+            "{}/{}{}",
+            self.connection_string_no_db().expose_secret(),
+            self.db_name,
+            ssl
         ))
     }
 
@@ -52,14 +112,23 @@ pub struct Settings {
 const CONFIG_PREFIX: &str = "config";
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
+    pub fn new(base_path: Option<&str>, base_name: Option<&str>) -> Result<Self, ConfigError> {
+        // Config file: defaults to ./CONFIG_PREFIX/APP_NAME
+        let config_dir = match base_path {
+            Some(path) => PathBuf::from(path),
+            None => std::env::current_dir()
+                .expect("Failed to determine current directory")
+                .join(CONFIG_PREFIX),
+        };
+        let app_name = match base_name {
+            Some(name) => name,
+            None => APP_NAME,
+        };
         let env: Env = std::env::var("APP_ENV")
             .unwrap_or_else(|_| "prod".into())
             .try_into()
             .expect("Failed to parse the APP_ENV environment variable");
-        let base_path = std::env::current_dir().expect("Failed to determine current directory");
-        let config_dir = base_path.join(CONFIG_PREFIX);
-        let config_path = config_dir.join(APP_NAME);
+        let config_path = config_dir.join(app_name);
         let env_config_path = config_dir.join(env.as_str());
         let builder = Config::builder()
             .set_default("env", env.as_str())?
@@ -70,12 +139,33 @@ impl Settings {
             .set_default("database.db_user", "")?
             .set_default("database.db_password", "")?
             .set_default("database.db_name", "prod")?
+            .set_default("database.ssl_mode", "disable")?
             .add_source(File::from(config_path))
             .add_source(File::from(env_config_path).required(false))
             .add_source(Environment::with_prefix(APP_NAME).separator("__"))
             .build()?;
 
         builder.try_deserialize()
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Default)]
+#[allow(non_camel_case_types)]
+pub enum SslMode {
+    #[default]
+    disable,
+    require,
+}
+
+impl TryFrom<String> for SslMode {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "disable" => Ok(Self::disable),
+            "require" => Ok(Self::require),
+            other => Err(format!("{} is not a supported ssl_mode", other)),
+        }
     }
 }
 
@@ -116,16 +206,5 @@ impl fmt::Display for Env {
             Env::Test => write!(f, "Test"),
             Env::Prod => write!(f, "Prod"),
         }
-    }
-}
-
-const ENV_DBPASS: &str = "DB_PASSWORD";
-
-pub fn override_db_password(global_config: &mut Settings) {
-    // Get database password from .env
-    dotenv().ok();
-
-    if env::var(ENV_DBPASS).is_ok() && !env::var(ENV_DBPASS).unwrap().is_empty() {
-        global_config.database.db_password = Secret::from(env::var(ENV_DBPASS).unwrap());
     }
 }
