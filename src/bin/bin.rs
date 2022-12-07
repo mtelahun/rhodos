@@ -1,7 +1,3 @@
-extern crate slog;
-extern crate slog_async;
-extern crate slog_term;
-
 use docopt::Docopt;
 use librhodos::telemetry::{get_subscriber, init_subscriber};
 use secrecy::{ExposeSecret, Secret};
