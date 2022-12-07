@@ -1,6 +1,6 @@
 use docopt::Docopt;
 use librhodos::telemetry::{get_subscriber, init_subscriber};
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
 use serde::Deserialize;
 use std::net::TcpListener;
 use std::process::ExitCode;
@@ -56,19 +56,8 @@ async fn main() -> ExitCode {
         let mut uri_list: Vec<DbUri> = vec![];
         if args.flag_database.is_empty() {
             uri_list.push(DbUri {
-                full: Secret::from(format!(
-                    "{}/{}",
-                    global_config.database.connection_string().expose_secret(),
-                    global_config.database.db_name
-                )),
-                path: Secret::from(format!(
-                    "{}/{}",
-                    global_config
-                        .database
-                        .connection_string_no_db()
-                        .expose_secret(),
-                    global_config.database.db_name
-                )),
+                full: global_config.database.connection_string(),
+                path: global_config.database.connection_string_no_db(),
                 db_name: global_config.database.db_name.clone(),
             });
         } else {
@@ -85,6 +74,9 @@ async fn main() -> ExitCode {
             }
         }
 
+        if uri_list.is_empty() {
+            tracing::error!("No databases to initialize!")
+        };
         for uri in uri_list {
             let _ = migration::initialize_and_migrate_database(&uri)
                 .await
