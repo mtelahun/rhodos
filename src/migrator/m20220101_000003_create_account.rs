@@ -19,14 +19,14 @@ CREATE TABLE "account" (
     email VARCHAR NOT NULL,
     password VARCHAR,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-)"#;
+);"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
 
-        let sql = r#"SELECT rhodos_manage_updated_at('account')"#;
+        let sql = r#"SELECT rhodos_manage_updated_at('account');"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),
