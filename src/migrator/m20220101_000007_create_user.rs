@@ -5,7 +5,7 @@ pub struct Migration;
 
 impl MigrationName for Migration {
     fn name(&self) -> &str {
-        "m20220101_000006_create_microblog"
+        "m20220101_000007_create_user"
     }
 }
 
@@ -14,11 +14,10 @@ impl MigrationTrait for Migration {
     // Define how to apply this migration
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-CREATE TABLE microblog (
+CREATE TABLE "user" (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR NOT NULL,
-    short_desc VARCHAR,
-    about TEXT,
+    email VARCHAR,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
@@ -26,7 +25,7 @@ CREATE TABLE microblog (
             Ok(_) => {}
             Err(e) => return Err(e),
         }
-        let sql = r#"SELECT rhodos_manage_updated_at('microblog');"#;
+        let sql = r#"SELECT rhodos_manage_updated_at("user");"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),
@@ -36,7 +35,7 @@ CREATE TABLE microblog (
 
     // Define how to rollback this migration
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = "DROP TABLE microblog;";
+        let sql = r#"DROP TABLE "user";"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),

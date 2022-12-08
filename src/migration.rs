@@ -36,7 +36,7 @@ pub async fn init<'a>(server_url: &Secret<String>, db_name: &String) -> Result<(
 
 pub async fn migrate(db: &DatabaseConnection) -> Result<(), DbErr> {
     tracing::info!("Starting migration");
-    Migrator::refresh(db).await?;
+    Migrator::up(db, None).await?;
 
     let schema_manager = SchemaManager::new(db);
     assert!(schema_manager.has_table("account").await?);

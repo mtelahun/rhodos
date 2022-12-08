@@ -25,13 +25,13 @@ CREATE TABLE content (
     CONSTRAINT fk_publisher
         FOREIGN KEY(publisher_id)
             REFERENCES account
-)"#;
+);"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
-        let sql = r#"SELECT rhodos_manage_updated_at('content')"#;
+        let sql = r#"SELECT rhodos_manage_updated_at('content');"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),
