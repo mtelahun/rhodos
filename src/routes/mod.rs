@@ -1,26 +1,31 @@
-use axum::{http::StatusCode, routing::get, Extension, Router};
+use axum::{
+    http::StatusCode,
+    routing::{get, post},
+    Router,
+};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
+use tower_http::trace::TraceLayer;
 
 pub mod health_check;
 pub mod index;
 pub mod test;
+pub mod user;
 
 use health_check::health_check;
 use index::index;
-use test::proxy;
-use tokio::sync::RwLock;
-use tower_http::trace::TraceLayer;
 
 use crate::entities::prelude::*;
 use crate::{entities::instance, settings::Settings};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TenantData {
     domain: String,
     db: DatabaseConnection,
 }
 
+#[derive(Debug)]
 pub struct AppState {
     domain: String,
     rhodos_db: Option<DatabaseConnection>,
@@ -46,9 +51,9 @@ pub async fn create_routes(global_config: &Settings) -> Result<Router, String> {
     let router = Router::new()
         .route("/", get(index))
         .route("/health_check", get(health_check))
-        .route("/proxy", get(proxy))
+        .route("/user", post(user::create))
         .layer(TraceLayer::new_for_http())
-        .layer(Extension(shared_state));
+        .with_state(shared_state);
 
     Ok(router)
 }
@@ -65,7 +70,6 @@ pub async fn get_db_from_host(
 
     if key == state.domain {
         if let Some(dbconn) = &state.rhodos_db {
-            println!("This is the main DB!");
             return Ok(dbconn.clone());
         }
     }

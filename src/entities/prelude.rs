@@ -4,3 +4,4 @@ pub use super::account::Entity as Account;
 pub use super::content::Entity as Content;
 pub use super::instance::Entity as Instance;
 pub use super::microblog::Entity as Microblog;
+pub use super::user::Entity as User;

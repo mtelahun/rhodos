@@ -3,6 +3,7 @@ use settings::Settings;
 use std::net::TcpListener;
 
 pub mod db;
+pub mod domain;
 pub mod entities;
 pub mod migration;
 pub mod migrator;
