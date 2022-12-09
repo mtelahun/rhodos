@@ -12,7 +12,9 @@ use uuid::Uuid;
 use super::{get_db_from_host, AppState};
 use crate::{
     domain::{user_email::UserEmail, NewUser, UserName},
+    email_client::EmailClient,
     entities::{prelude::*, user},
+    smtp_client::SmtpMailer,
 };
 
 #[derive(Debug, Deserialize)]
@@ -44,8 +46,27 @@ pub async fn create(
     let new_user = parse_user(&form)
         .map_err(|_| StatusCode::BAD_REQUEST)
         .unwrap();
-
     insert_user(&conn, &new_user).await;
+
+    let plain = "This is the email body".to_string();
+    let html = "<h1>This is the email body</h1>".to_string();
+    let smtp_mailer = SmtpMailer::new(
+        &state.global_config.email_outgoing.smtp_host.clone(),
+        state.global_config.email_outgoing.smtp_port,
+        &state.global_config.email_outgoing.smtp_user.clone(),
+        state.global_config.email_outgoing.smtp_password.clone(),
+    );
+    let email_client = EmailClient::new(state.global_config.email_outgoing.smtp_sender.clone());
+    let _ = email_client
+        .send_email(
+            new_user.email,
+            &"Please confirm your email".to_string(),
+            &plain,
+            &html,
+            &smtp_mailer,
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
 
     StatusCode::OK
 }

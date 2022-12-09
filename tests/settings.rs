@@ -98,3 +98,21 @@ async fn ssl_mode_uri_string_02() {
         "in ssl mode the ssl setting is in the URI string",
     );
 }
+
+#[tokio::test]
+async fn email_outgoing_00() {
+    let conf = make("email_outgoing_00");
+    let host = conf.email_outgoing.smtp_host;
+    let port = conf.email_outgoing.smtp_port;
+    let user = conf.email_outgoing.smtp_user;
+    let password = conf.email_outgoing.smtp_password;
+    let sender = conf.email_outgoing.smtp_sender;
+    let disable_ssl = conf.email_outgoing.disable_ssl;
+
+    assert_eq!(host, "mylar.system");
+    assert_eq!(port, 2525);
+    assert_eq!(user, "macgregor");
+    assert_eq!(password.expose_secret(), "buttercup");
+    assert_eq!(sender.as_ref(), "wh@benji.org");
+    assert_eq!(disable_ssl, false, "ssl is enabled by default");
+}

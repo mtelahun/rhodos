@@ -1,17 +1,35 @@
-use crate::domain::UserEmail;
+use lettre::{message::MultiPart, Message};
+
+use crate::{domain::UserEmail, smtp_client::SmtpMailer};
 
 pub struct EmailClient {
-    _sender: UserEmail,
+    pub sender: UserEmail,
 }
 
 impl EmailClient {
+    pub fn new(sender: UserEmail) -> Self {
+        Self { sender }
+    }
+
     pub async fn send_email(
         &self,
-        _receipient: UserEmail,
-        _subject: &str,
-        _html_content: &str,
-        _text_content: &str,
+        to: UserEmail,
+        subject: &String,
+        plain: &String,
+        html: &String,
+        smtp_mailer: &SmtpMailer,
     ) -> Result<(), String> {
-        todo!()
+        let email = Message::builder()
+            .from(self.sender.as_ref().parse().unwrap())
+            .to(to.as_ref().parse().unwrap())
+            .subject(subject)
+            .multipart(MultiPart::alternative_plain_html(
+                plain.to_string(),
+                html.to_string(),
+            ))
+            .map_err(|e| e.to_string())
+            .unwrap();
+
+        smtp_mailer.send(&email)
     }
 }

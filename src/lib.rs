@@ -10,6 +10,7 @@ pub mod migration;
 pub mod migrator;
 pub mod routes;
 pub mod settings;
+pub mod smtp_client;
 pub mod telemetry;
 
 pub const APP_NAME: &str = "rhodos";
