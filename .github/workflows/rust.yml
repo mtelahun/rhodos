@@ -22,6 +22,11 @@ jobs:
           POSTGRES_PASSWORD: password
         ports:
           - 5432:5432
+      mailhog:
+        image: mailhog/mailhog:v1.0.1
+        ports:
+          - 1025:1025
+          - 8025:8025
     env:
       SQLX_VERSION: 0.6.2
       SQLX_FEATURES: "rustls,postgres"
@@ -94,6 +99,11 @@ jobs:
           POSTGRES_PASSWORD: password
         ports:
           - 5432:5432
+      mailhog:
+        image: mailhog/mailhog:v1.0.1
+        ports:
+          - 1025:1025
+          - 8025:8025
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

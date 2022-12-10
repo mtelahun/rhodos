@@ -33,16 +33,10 @@ pub struct AppState {
     host_db_map: Arc<RwLock<HashMap<String, TenantData>>>,
 }
 
-pub async fn create_routes(global_config: &Settings) -> Result<Router, String> {
-    let db = match Database::connect(global_config.database.connection_options()).await {
-        Ok(conn) => conn,
-        Err(e) => {
-            return Err(format!(
-                "create_routes: unable to connect to database {}: {}",
-                global_config.database.db_name, e,
-            ))
-        }
-    };
+pub async fn create_routes(
+    db: DatabaseConnection,
+    global_config: &Settings,
+) -> Result<Router, String> {
     let shared_state = Arc::new(AppState {
         domain: global_config.server.domain.clone(),
         rhodos_db: Some(db),
