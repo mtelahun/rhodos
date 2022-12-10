@@ -16,8 +16,8 @@ pub mod user;
 use health_check::health_check;
 use index::index;
 
-use crate::entities::prelude::*;
-use crate::{entities::instance, settings::Settings};
+use crate::entities::instance;
+use crate::{entities::prelude::*, settings::Settings};
 
 #[derive(Clone, Debug)]
 pub struct TenantData {
@@ -29,22 +29,18 @@ pub struct TenantData {
 pub struct AppState {
     domain: String,
     rhodos_db: Option<DatabaseConnection>,
+    global_config: Settings,
     host_db_map: Arc<RwLock<HashMap<String, TenantData>>>,
 }
 
-pub async fn create_routes(global_config: &Settings) -> Result<Router, String> {
-    let db = match Database::connect(global_config.database.connection_options()).await {
-        Ok(conn) => conn,
-        Err(e) => {
-            return Err(format!(
-                "create_routes: unable to connect to database {}: {}",
-                global_config.database.db_name, e,
-            ))
-        }
-    };
+pub async fn create_routes(
+    db: DatabaseConnection,
+    global_config: &Settings,
+) -> Result<Router, String> {
     let shared_state = Arc::new(AppState {
         domain: global_config.server.domain.clone(),
         rhodos_db: Some(db),
+        global_config: global_config.clone(),
         host_db_map: Arc::new(RwLock::new(HashMap::new())),
     });
 

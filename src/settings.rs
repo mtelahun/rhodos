@@ -6,6 +6,8 @@ use serde::Deserialize;
 use std::{env, fmt, path::PathBuf, time::Duration};
 use tracing::log;
 
+use crate::domain::UserEmail;
+
 use super::APP_NAME;
 
 const ENV_DBPASS: &str = "DB_PASSWORD";
@@ -103,9 +105,20 @@ impl Database {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct EmailOutgoing {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_user: String,
+    pub smtp_password: Secret<String>,
+    pub smtp_sender: UserEmail,
+    pub disable_ssl: bool,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub server: Server,
     pub database: Database,
+    pub email_outgoing: EmailOutgoing,
     pub env: Env,
 }
 
