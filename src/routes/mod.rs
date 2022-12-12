@@ -12,6 +12,7 @@ pub mod health_check;
 pub mod index;
 pub mod test;
 pub mod user;
+pub mod user_confirm;
 
 use health_check::health_check;
 use index::index;
@@ -48,6 +49,7 @@ pub async fn create_routes(
         .route("/", get(index))
         .route("/health_check", get(health_check))
         .route("/user", post(user::create))
+        .route("/user/confirm", get(user_confirm::confirm))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 

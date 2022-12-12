@@ -26,6 +26,7 @@ pub struct Server {
     pub domain: String,
     pub port: u16,
     pub log_level: String,
+    pub base_url: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

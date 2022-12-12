@@ -17,6 +17,8 @@ pub mod telemetry;
 
 pub const APP_NAME: &str = "rhodos";
 
+pub struct AppBaseUrl(pub String);
+
 pub async fn get_database_connection(
     global_config: &Settings,
 ) -> Result<DatabaseConnection, String> {

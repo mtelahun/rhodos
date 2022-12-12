@@ -3,25 +3,30 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "user")]
+#[sea_orm(table_name = "user_token")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    pub name: String,
-    pub email: Option<String>,
-    pub confirmed: bool,
+    pub token: String,
+    pub user_id: i64,
     pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::user_token::Entity")]
-    UserToken,
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    User,
 }
 
-impl Related<super::user_token::Entity> for Entity {
+impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::UserToken.def()
+        Relation::User.def()
     }
 }
 
