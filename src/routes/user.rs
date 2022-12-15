@@ -3,6 +3,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::{
     extract::{Host, State},
+    http::StatusCode,
+    response::IntoResponse,
     Form,
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -15,7 +17,7 @@ use crate::{
     domain::{user_email::UserEmail, NewUser, UserName},
     email_client::EmailClient,
     entities::{prelude::*, user, user_token},
-    error::{EmailTokenError, RhodosError, StoreTokenError, TenantMapError},
+    error::{error_chain_fmt, TenantMapError},
     smtp_client::SmtpMailer,
 };
 
@@ -38,11 +40,11 @@ pub async fn create(
     Host(host): Host,
     State(state): State<Arc<AppState>>,
     Form(form): Form<InputUser>,
-) -> Result<(), RhodosError> {
+) -> Result<(), UserError> {
     let hst = host.to_string();
     let conn = get_db_from_host(&hst, &state).await.map_err(|e| match e {
-        TenantMapError::NotFound(s) => RhodosError::ValidationError(s),
-        TenantMapError::UnexpectedError(s) => RhodosError::UnexpectedError(anyhow::anyhow!(s)),
+        TenantMapError::NotFound(s) => UserError::ValidationError(s),
+        TenantMapError::UnexpectedError(s) => UserError::UnexpectedError(anyhow::anyhow!(s)),
     })?;
 
     let new_user = parse_user(&form)?;
@@ -51,7 +53,7 @@ pub async fn create(
     // Transaction: find the token, update the user, remove token
     let new_user2 = new_user.clone();
     let token2 = token.clone();
-    conn.transaction::<_, (), RhodosError>(|txn| {
+    conn.transaction::<_, (), UserError>(|txn| {
         Box::pin(async move {
             let user_id = insert_user(txn, &new_user2)
                 .await
@@ -67,7 +69,7 @@ pub async fn create(
     .context("Encountered a database transaction error")?;
 
     if let Err(e) = send_confirmation_email(&new_user, &state, &token).await {
-        return Err(RhodosError::ValidationError(e.to_string()));
+        return Err(UserError::ValidationError(e.to_string()));
     }
 
     Ok(())
@@ -155,4 +157,103 @@ pub async fn store_token(
     .await?;
 
     Ok(())
+}
+
+#[derive(thiserror::Error)]
+pub enum UserError {
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
+    #[error("{0}")]
+    ValidationError(String),
+    #[error("{0}")]
+    AuthorizationError(String),
+}
+
+impl IntoResponse for UserError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, err_msg) = match self {
+            Self::AuthorizationError(s) => {
+                tracing::info!("authorization denied: {s:?}");
+                (StatusCode::UNAUTHORIZED, s)
+            }
+            Self::UnexpectedError(e) => {
+                tracing::info!("an unexpected error occured");
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))
+            }
+            Self::ValidationError(s) => {
+                tracing::info!("unable to validate user supplied data: {s:?}");
+                (StatusCode::BAD_REQUEST, s)
+            }
+        };
+        (status, err_msg).into_response()
+    }
+}
+
+impl From<String> for UserError {
+    fn from(s: String) -> Self {
+        Self::ValidationError(s)
+    }
+}
+
+impl std::fmt::Debug for UserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+#[derive(thiserror::Error)]
+#[error("Failed to send a confirmation email: {0:?}")]
+pub struct EmailTokenError(String);
+
+impl From<String> for EmailTokenError {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl std::fmt::Debug for EmailTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A mail error was encountered while trying to\
+            send a new user confirmation email.\nCaused by:\n\t{}",
+            self.0
+        )
+    }
+}
+
+#[derive(thiserror::Error)]
+#[error("Failed to store a new user confirmation token: {0:?}")]
+pub struct StoreTokenError(#[from] DbErr);
+
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn confirmation_token_is_25_chars() {
+        let token = generate_confirmation_token();
+        assert_eq!(token.len(), 25, "Confirmation token is 25 chars long");
+    }
+
+    #[test]
+    fn confirmation_token_does_not_include_invalid_chars() {
+        let invalid_chars = vec![
+            ":", "/", "?", "#", "[", "]", "@", "!", "$", "&", "'", "(", ")", "*", "+", ",", ";",
+            "=",
+        ];
+        let token = generate_confirmation_token();
+        for c in invalid_chars {
+            assert!(
+                !token.contains(c),
+                "Confirmation token does not contain any invalid chars"
+            );
+        }
+    }
 }
