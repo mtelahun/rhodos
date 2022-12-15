@@ -1,5 +1,6 @@
 use librhodos::startup;
 use once_cell::sync::Lazy;
+use secrecy::Secret;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 
@@ -8,7 +9,6 @@ use librhodos::{
     migration::{self, DbUri},
     serve, settings,
 };
-use secrecy::Secret;
 
 pub struct ConfirmationLinks {
     pub html: reqwest::Url,

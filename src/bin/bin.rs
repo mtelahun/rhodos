@@ -10,7 +10,7 @@ use librhodos::APP_NAME;
 async fn main() -> ExitCode {
     let subscriber = get_subscriber(
         APP_NAME.into(),
-        "rhodos=info,tower_http=info".into(),
+        "rhodos=debug,tower_http=debug".into(),
         std::io::stdout,
     );
     init_subscriber(subscriber);

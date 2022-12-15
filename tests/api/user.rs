@@ -105,3 +105,45 @@ async fn add_user_sends_confirmation_with_link() {
         "the links in the html and text parts are identical"
     );
 }
+
+#[tokio::test]
+async fn add_user_token_fails_if_fatal_db_err() {
+    // Arrange
+    let state = spawn_app().await;
+    let user_email: String = SafeEmail().fake();
+    let user_name: String = Name(EN).fake();
+    // Sabotage the database
+    let client = connect_to_db(&state.db_name.clone()).await;
+    client
+        .execute(r#"ALTER TABLE user_token DROP COLUMN "token""#, &[])
+        .await
+        .expect("query to alter user_token table failed");
+
+    // Act
+    let post_body = format!("name={}&email={}", user_name, user_email);
+    let response = state.post_user(post_body.to_string()).await;
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 500)
+}
+
+#[tokio::test]
+async fn insert_user_fails_if_fatal_db_err() {
+    // Arrange
+    let state = spawn_app().await;
+    let user_email: String = SafeEmail().fake();
+    let user_name: String = Name(EN).fake();
+    // Sabotage the database
+    let client = connect_to_db(&state.db_name.clone()).await;
+    client
+        .execute(r#"ALTER TABLE "user" DROP COLUMN "email""#, &[])
+        .await
+        .expect("query to alter user table failed");
+
+    // Act
+    let post_body = format!("name={}&email={}", user_name, user_email);
+    let response = state.post_user(post_body.to_string()).await;
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 500)
+}

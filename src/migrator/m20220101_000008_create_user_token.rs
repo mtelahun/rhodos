@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
         let sql = r#"
 CREATE TABLE "user_token" (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    token VARCHAR NOT NULL,
+    token VARCHAR UNIQUE NOT NULL,
     user_id BIGINT NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_user

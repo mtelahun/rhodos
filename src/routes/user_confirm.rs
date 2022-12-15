@@ -13,7 +13,7 @@ use crate::entities::{prelude::*, user, user_token};
 
 #[derive(Debug, Deserialize)]
 pub struct QueryParameters {
-    confirmation_token: String,
+    confirmation_token: Option<String>,
 }
 
 #[tracing::instrument(
@@ -35,6 +35,9 @@ pub async fn confirm(
         .unwrap();
 
     let request_token = query_params.confirmation_token;
+    if request_token.is_none() {
+        return StatusCode::BAD_REQUEST;
+    }
 
     // Transaction: find the token, update the user, remove token
     db.transaction::<_, (), DbErr>(|txn| {
