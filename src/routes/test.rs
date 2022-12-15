@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::entities::prelude::*;
 use crate::routes::get_db_from_host;
+use crate::{entities::prelude::*, error::TenantMapError};
 use axum::{extract::Host, http::StatusCode, Extension};
 use axum_macros::debug_handler;
 use sea_orm::EntityTrait;
@@ -27,6 +27,9 @@ pub async fn proxy(
             }
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
-        Err(e) => Err(e),
+        Err(e) => match e {
+            TenantMapError::NotFound(_) => Err(StatusCode::NOT_FOUND),
+            TenantMapError::UnexpectedError(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        },
     }
 }

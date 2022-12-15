@@ -7,6 +7,7 @@ pub mod db;
 pub mod domain;
 pub mod email_client;
 pub mod entities;
+pub mod error;
 pub mod migration;
 pub mod migrator;
 pub mod routes;
