@@ -13,7 +13,7 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        to: UserEmail,
+        to: &UserEmail,
         subject: &String,
         plain: &String,
         html: &String,

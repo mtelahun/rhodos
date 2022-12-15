@@ -10,7 +10,7 @@ use librhodos::APP_NAME;
 async fn main() -> ExitCode {
     let subscriber = get_subscriber(
         APP_NAME.into(),
-        "rhodos=info,tower_http=info".into(),
+        "rhodos=debug,tower_http=debug".into(),
         std::io::stdout,
     );
     init_subscriber(subscriber);
@@ -27,7 +27,10 @@ async fn main() -> ExitCode {
     // Process command line arguments
     let args: startup::Args = startup::process_command_line();
     if args.flag_init_db.is_some() {
-        startup::initialize_database(&args, &global_config).await;
+        if let Err(e) = startup::initialize_database(&args, &global_config).await {
+            eprintln!("failed to initialize database: {}", e);
+            return ExitCode::FAILURE;
+        }
         return ExitCode::SUCCESS;
     }
 

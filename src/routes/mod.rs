@@ -1,5 +1,4 @@
 use axum::{
-    http::StatusCode,
     routing::{get, post},
     Router,
 };
@@ -12,11 +11,12 @@ pub mod health_check;
 pub mod index;
 pub mod test;
 pub mod user;
+pub mod user_confirm;
 
 use health_check::health_check;
 use index::index;
 
-use crate::entities::instance;
+use crate::{entities::instance, error::TenantMapError};
 use crate::{entities::prelude::*, settings::Settings};
 
 #[derive(Clone, Debug)]
@@ -48,6 +48,7 @@ pub async fn create_routes(
         .route("/", get(index))
         .route("/health_check", get(health_check))
         .route("/user", post(user::create))
+        .route("/user/confirm", get(user_confirm::confirm))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 
@@ -57,7 +58,7 @@ pub async fn create_routes(
 pub async fn get_db_from_host(
     host: &str,
     state: &Arc<AppState>,
-) -> Result<DatabaseConnection, StatusCode> {
+) -> Result<DatabaseConnection, TenantMapError> {
     let mut split = host.split(':');
     let mut key = "".to_string();
     if let Some(i) = split.next() {
@@ -76,74 +77,63 @@ pub async fn get_db_from_host(
     }
 }
 
-async fn map_get(
-    key: &String,
-    //db: &DatabaseConnection,
-    state: &Arc<AppState>,
-) -> Result<TenantData, StatusCode> {
-    println!("in map_get()");
-
+async fn map_get(key: &String, state: &Arc<AppState>) -> Result<TenantData, TenantMapError> {
+    // Scope our RwLock
     {
-        println!("  reading...");
+        // Happy path: tenant is already in the Map
         let db_map = state.host_db_map.read().await;
         let found_tenant = db_map.get(key);
 
         if let Some(value) = found_tenant {
-            println!("found key: {}", value.domain);
             return Ok(value.clone());
         }
     }
-    println!("did NOT find key: {}", key);
-    let db_opt = &state.rhodos_db;
-    if let Some(db) = db_opt {
-        let instance = Instance::find()
-            .filter(instance::Column::Domain.eq(key.clone()))
-            .one(db)
-            .await;
-        if let Ok(Some(inst)) = instance {
-            let db_url = make_db_uri(&inst);
-            let res = map_set(&inst.domain, &db_url, state).await;
-            if let Ok(td) = res {
-                return Ok(td);
-            }
-        }
-    } else {
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
 
-    Err(StatusCode::NOT_FOUND)
+    // Tenant is not in the Map. Search for it in the instance table of the main db.
+    //
+    if state.rhodos_db.is_none() {
+        return Err(TenantMapError::UnexpectedError(
+            "no valid connection to main database".to_string(),
+        ));
+    }
+    let db = state.rhodos_db.clone().unwrap();
+    let instance = Instance::find()
+        .filter(instance::Column::Domain.eq(key.clone()))
+        .one(&db)
+        .await
+        .map_err(|e| TenantMapError::NotFound(e.to_string()))?
+        .unwrap();
+    let db_url = make_db_uri(&instance);
+    let res = map_set(&instance.domain, &db_url, state).await?;
+    assert_eq!(res.domain, instance.domain);
+
+    Ok(res)
 }
 
 async fn map_set(
-    domain: &String,
-    db_url: &String,
+    domain: &str,
+    db_url: &str,
     state: &Arc<AppState>,
-) -> Result<TenantData, String> {
-    println!("in map_set(): db_url = {}", db_url);
-    let db = match Database::connect(db_url).await {
-        Ok(conn) => conn,
-        Err(e) => return Err(e.to_string()),
-    };
+) -> Result<TenantData, TenantMapError> {
+    let db = Database::connect(db_url)
+        .await
+        .map_err(|e| TenantMapError::NotFound(e.to_string()))?;
 
-    println!("found tenant: {}", domain);
     let td = TenantData {
-        domain: domain.clone(),
+        domain: domain.to_string(),
         db,
     };
 
-    println!("inserting...");
     let _ = &state
         .host_db_map
         .write()
         .await
-        .insert(domain.clone(), td.clone());
-    println!("insert done");
+        .insert(domain.to_string(), td.clone());
 
     Ok(td)
 }
 
 fn make_db_uri(inst: &instance::Model) -> String {
-    println!("in make_db_uri()");
     let mut db_host: String = "".to_string();
     let mut db_port: u16 = 0;
     let mut db_user: String = "".to_string();

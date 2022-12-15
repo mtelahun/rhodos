@@ -36,7 +36,7 @@ pub fn process_command_line() -> Args {
     args
 }
 
-pub async fn initialize_database(args: &Args, global_config: &Settings) {
+pub async fn initialize_database(args: &Args, global_config: &Settings) -> Result<(), String> {
     tracing::info!("Database initialization started");
     let mut uri_list: Vec<DbUri> = vec![];
     if args.flag_database.is_empty() {
@@ -63,12 +63,10 @@ pub async fn initialize_database(args: &Args, global_config: &Settings) {
         tracing::error!("No databases to initialize!")
     };
     for uri in uri_list {
-        let _ = migration::initialize_and_migrate_database(&uri)
-            .await
-            .map_err(|err_str| {
-                eprintln!("{}", err_str);
-            });
+        migration::initialize_and_migrate_database(&uri).await?;
     }
+
+    Ok(())
 }
 
 pub async fn build(

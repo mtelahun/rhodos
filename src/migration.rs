@@ -40,6 +40,11 @@ pub async fn migrate(db: &DatabaseConnection) -> Result<(), DbErr> {
 
     let schema_manager = SchemaManager::new(db);
     assert!(schema_manager.has_table("account").await?);
+    assert!(schema_manager.has_table("content").await?);
+    assert!(schema_manager.has_table("instance").await?);
+    assert!(schema_manager.has_table("microblog").await?);
+    assert!(schema_manager.has_table("user").await?);
+    assert!(schema_manager.has_table("user_token").await?);
 
     Ok(())
 }
@@ -53,18 +58,15 @@ pub async fn initialize_and_migrate_database(uri: &DbUri) -> Result<(), String> 
     });
 
     // Migrate DB
-    let db_conn = db::connect(uri.full.expose_secret())
+    let db_conn = db::connect(uri.full.expose_secret()).await.map_err(|e| {
+        format!(
+            "Unable to connect to postgres://****/{}: {}",
+            uri.db_name, e
+        )
+    })?;
+    migrate(&db_conn)
         .await
-        .map_err(|e| {
-            Err::<(), std::string::String>(format!(
-                "Unable to connect to postgres://****/{}: {}",
-                uri.db_name, e
-            ))
-        })
-        .unwrap();
-    let _ = migrate(&db_conn).await.map_err(|e| {
-        Err::<(), std::string::String>(format!("Migration of {} failed: {}", uri.db_name, e))
-    });
+        .map_err(|e| format!("Migration of {} failed: {}", uri.db_name, e))?;
 
     tracing::info!("Database(s) initialization finished");
     Ok(())

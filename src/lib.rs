@@ -7,6 +7,7 @@ pub mod db;
 pub mod domain;
 pub mod email_client;
 pub mod entities;
+pub mod error;
 pub mod migration;
 pub mod migrator;
 pub mod routes;
@@ -16,6 +17,8 @@ pub mod startup;
 pub mod telemetry;
 
 pub const APP_NAME: &str = "rhodos";
+
+pub struct AppBaseUrl(pub String);
 
 pub async fn get_database_connection(
     global_config: &Settings,

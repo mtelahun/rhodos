@@ -7,3 +7,4 @@ pub mod content;
 pub mod instance;
 pub mod microblog;
 pub mod user;
+pub mod user_token;
