@@ -97,3 +97,20 @@ async fn confirmation_link_confirms_added_user() {
         .expect("query to fetch user_token row failed");
     assert!(row.is_empty(), "the token has been removed");
 }
+
+#[tokio::test]
+async fn confirm_with_invalid_token_rejected_401() {
+    // Arrange
+    let app = spawn_app().await;
+
+    // Act
+    let response = reqwest::get(&format!(
+        "{}/user/confirm?confirmation_token=abcd",
+        app.app_address
+    ))
+    .await
+    .unwrap();
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 401);
+}
