@@ -8,7 +8,7 @@ use axum::{
     Form,
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, EntityTrait, Set, TransactionTrait};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -44,18 +44,27 @@ pub async fn create(
     let conn = get_db_from_host(&hst, &state).await.unwrap();
 
     let new_user = parse_user(&form)?;
-
-    let user_id = insert_user(&conn, &new_user)
-        .await
-        .context("Failed to insert a new user into the database")?;
-
     let token = generate_confirmation_token();
 
-    store_token(user_id, &token, &conn)
-        .await
-        .context("Failed to store the new user confirmation token in the database")?;
+    // Transaction: find the token, update the user, remove token
+    let new_user2 = new_user.clone();
+    let token2 = token.clone();
+    conn.transaction::<_, (), RhodosError>(|txn| {
+        Box::pin(async move {
+            let user_id = insert_user(txn, &new_user2)
+                .await
+                .context("Failed to insert a new user into the database")?;
 
-    if let Err(e) = send_confirmation_email(new_user, &state, &token).await {
+            store_token(user_id, &token2, txn)
+                .await
+                .context("Failed to store the new user confirmation token in the database")?;
+            Ok(())
+        })
+    })
+    .await
+    .context("Encountered a database transaction error")?;
+
+    if let Err(e) = send_confirmation_email(&new_user, &state, &token).await {
         return Err(RhodosError::ValidationError(e.to_string()));
     }
 
@@ -67,7 +76,7 @@ pub async fn create(
     skip(new_user, state)
 )]
 pub async fn send_confirmation_email(
-    new_user: NewUser,
+    new_user: &NewUser,
     state: &Arc<AppState>,
     token: &str,
 ) -> Result<(), EmailTokenError> {
@@ -92,7 +101,7 @@ pub async fn send_confirmation_email(
     let email_client = EmailClient::new(state.global_config.email_outgoing.smtp_sender.clone());
     email_client
         .send_email(
-            new_user.email,
+            &new_user.email,
             &"Please confirm your email".to_string(),
             &plain,
             &html,
@@ -111,7 +120,7 @@ fn generate_confirmation_token() -> String {
         .collect()
 }
 
-async fn insert_user(conn: &DatabaseConnection, new_user: &NewUser) -> Result<i64, DbErr> {
+async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i64, DbErr> {
     let data = user::ActiveModel {
         name: Set(new_user.name.as_ref().to_string()),
         email: Set(Some(new_user.email.as_ref().to_string())),
@@ -133,7 +142,7 @@ fn parse_user(form: &InputUser) -> Result<NewUser, String> {
 pub async fn store_token(
     user_id: i64,
     token: &str,
-    db: &DatabaseConnection,
+    db: &DatabaseTransaction,
 ) -> Result<(), StoreTokenError> {
     user_token::ActiveModel {
         user_id: Set(user_id),

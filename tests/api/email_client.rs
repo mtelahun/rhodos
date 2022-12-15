@@ -21,7 +21,7 @@ async fn send_email() {
     let email_client = EmailClient::new(UserEmail::parse(SafeEmail().fake()).unwrap());
     let _ = email_client
         .send_email(
-            UserEmail::parse(SafeEmail().fake()).unwrap(),
+            &UserEmail::parse(SafeEmail().fake()).unwrap(),
             &smtp_subject,
             &plain,
             &html,
