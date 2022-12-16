@@ -32,6 +32,16 @@ impl TestState {
             .expect("Failed to execute request")
     }
 
+    pub async fn content_post(&self, body: String) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/content", self.app_address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
     pub async fn get_confirmation_links(&self, recepient: &String) -> ConfirmationLinks {
         let client = reqwest::Client::new();
         let response = client

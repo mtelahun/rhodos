@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
+pub mod content;
 pub mod health_check;
 pub mod index;
 pub mod test;
@@ -46,6 +47,7 @@ pub async fn create_routes(
 
     let router = Router::new()
         .route("/", get(index))
+        .route("/content", post(content::create))
         .route("/health_check", get(health_check))
         .route("/user", post(user::create))
         .route("/user/confirm", get(user_confirm::confirm))
