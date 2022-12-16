@@ -5,7 +5,7 @@ use axum::{
     extract::{Host, State},
     http::StatusCode,
     response::IntoResponse,
-    Form,
+    Json,
 };
 use sea_orm::{EntityTrait, Set};
 use serde::Deserialize;
@@ -22,13 +22,18 @@ use crate::entities::prelude::*;
 const MAX_POST_CHARS: usize = 500;
 
 #[derive(Debug, Deserialize)]
+pub struct BodyData {
+    pub content: NewPost,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct NewPost {
     publisher_id: i64,
-    content: String,
+    text: String,
 }
 #[tracing::instrument(
     name = "Post a microblog",
-    skip(host, state, form),
+    skip(host, state, body),
     fields(
         request_id = %Uuid::new_v4()
     )
@@ -36,7 +41,7 @@ pub struct NewPost {
 pub async fn create(
     Host(host): Host,
     State(state): State<Arc<AppState>>,
-    Form(form): Form<NewPost>,
+    Json(body): Json<BodyData>,
 ) -> Result<(), ContentError> {
     let hst = host.to_string();
     let conn = get_db_from_host(&hst, &state).await.map_err(|e| match e {
@@ -44,8 +49,8 @@ pub async fn create(
         TenantMapError::UnexpectedError(s) => ContentError::UnexpectedError(anyhow::anyhow!(s)),
     })?;
 
-    let account_id = form.publisher_id;
-    let new_content = form.content;
+    let account_id = body.content.publisher_id;
+    let new_content = body.content.text;
     if new_content.is_empty() || new_content.len() > MAX_POST_CHARS || account_id <= 0 {
         tracing::error!("Content creation attempted, but a field is invalid");
         return Err(ContentError::ValidationError("empty content".to_string()));

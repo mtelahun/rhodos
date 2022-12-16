@@ -4,37 +4,78 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use crate::helpers::{connect_to_db, spawn_app};
 
 #[tokio::test]
-pub async fn empty_post_is_bad_request_400() {
+pub async fn invalid_json_is_bad_request_422() {
     // Arrange
     let state = spawn_app().await;
+    let invalid_cases = vec![
+        (
+            serde_json::json!({
+                "content": {}
+            }),
+            "missing content",
+        ),
+        (
+            serde_json::json!({
+                "content": {
+                    "text": "This is a post",
+                }
+            }),
+            "missing publisher",
+        ),
+    ];
 
-    // Act
-    let response = state.content_post("".to_string()).await;
+    for (case, desc) in invalid_cases {
+        // Act
+        let response = state.content_post(&case).await;
 
-    // Assert
-    assert_eq!(
-        400,
-        response.status().as_u16(),
-        "empty post data returns 400 Bad Request"
-    );
+        // Assert
+        assert_eq!(
+            422,
+            response.status().as_u16(),
+            "{} returns 400 Bad Request",
+            desc
+        );
+    }
 }
 
 #[tokio::test]
-pub async fn post_longer_than_500_chars_is_bad_request_400() {
+pub async fn logical_error_in_json_field_is_bad_request_400() {
     // Arrange
     let state = spawn_app().await;
     let msg = generate_random_data(501);
-    let body = format!("publisher_id={}&content={}", 1, msg);
+    let invalid_cases = vec![
+        (
+            serde_json::json!({
+                "content": {
+                    "text": "",
+                    "publisher_id": 0,
+                }
+            }),
+            "missing text",
+        ),
+        (
+            serde_json::json!({
+                "content": {
+                    "text": msg,
+                    "publisher_id": 0,
+                }
+            }),
+            "post greater than 500 chars",
+        ),
+    ];
 
-    // Act
-    let response = state.content_post(body).await;
+    for (case, desc) in invalid_cases {
+        // Act
+        let response = state.content_post(&case).await;
 
-    // Assert
-    assert_eq!(
-        400,
-        response.status().as_u16(),
-        "post data longer than 500 chars returns 400 Bad Request"
-    );
+        // Assert
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            "{} returns 400 Bad Request",
+            desc
+        );
+    }
 }
 
 #[tokio::test]
@@ -57,8 +98,13 @@ pub async fn post_less_than_501_chars_is_ok_200() {
 
     // Act
     let msg = generate_random_data(500);
-    let body = format!("publisher_id={}&content={}", account_id, msg);
-    let response = state.content_post(body).await;
+    let body = serde_json::json!({
+        "content": {
+            "text": msg,
+            "publisher_id": account_id,
+        }
+    });
+    let response = state.content_post(&body).await;
 
     // Assert
     assert_eq!(
@@ -115,8 +161,13 @@ async fn post_content_fails_if_fatal_db_err() {
         .expect("query to alter content table failed");
 
     // Act
-    let body = format!("publisher_id={}&content=this_is_a_test", account_id);
-    let response = state.content_post(body).await;
+    let body = serde_json::json!({
+        "content": {
+            "text": "This is a test.",
+            "publisher_id": account_id,
+        }
+    });
+    let response = state.content_post(&body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 500)

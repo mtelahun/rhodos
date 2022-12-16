@@ -32,11 +32,10 @@ impl TestState {
             .expect("Failed to execute request")
     }
 
-    pub async fn content_post(&self, body: String) -> reqwest::Response {
+    pub async fn content_post(&self, body: &serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/content", self.app_address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
+            .json(&body)
             .send()
             .await
             .expect("Failed to execute request")
