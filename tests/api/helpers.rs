@@ -35,6 +35,8 @@ impl TestState {
     pub async fn content_post(&self, body: &serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/content", self.app_address))
+            // Random creds!!
+            .basic_auth(Uuid::new_v4().to_string(), Some(Uuid::new_v4().to_string()))
             .json(&body)
             .send()
             .await

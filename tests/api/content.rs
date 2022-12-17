@@ -1,5 +1,6 @@
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use uuid::Uuid;
 
 use crate::helpers::{connect_to_db, spawn_app};
 
@@ -171,6 +172,51 @@ async fn post_content_fails_if_fatal_db_err() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 500)
+}
+
+#[tokio::test]
+async fn request_missing_authorization_rejected_401() {
+    // Arrange
+    let state = spawn_app().await;
+    let client = connect_to_db(&state.db_name.clone()).await;
+    client
+        .execute(
+            r#"INSERT INTO account(email) VALUES('test@mail.com');"#,
+            &[],
+        )
+        .await
+        .expect("query to add an account failed");
+    let row = client
+        .query_one("SELECT id FROM account WHERE email='test@mail.com';", &[])
+        .await
+        .expect("query to retrieve just added account failed");
+    let account_id: i64 = row.get(0);
+
+    // Act
+    let body = serde_json::json!({
+        "content": {
+            "text": "This is a random thought.",
+            "publisher_id": account_id,
+        }
+    });
+    let response = reqwest::Client::new()
+        .post(&format!("{}/content", state.app_address))
+        .json(&body)
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    // Assert
+    assert_eq!(
+        response.status().as_u16(),
+        401,
+        "missing creds return 401 Unauthorized"
+    );
+    assert_eq!(
+        response.headers()["WWW-Authenticate"],
+        r#"Basic realm="publish""#,
+        "Basic authentication"
+    )
 }
 
 fn generate_random_data(len: usize) -> String {
