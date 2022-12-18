@@ -1,7 +1,11 @@
+use argon2::password_hash::SaltString;
+use argon2::{Argon2, Params, PasswordHasher};
+use fake::faker::name::fr_fr::Name;
+use fake::{faker::internet::en::SafeEmail, Fake};
 use librhodos::startup;
 use once_cell::sync::Lazy;
-use secrecy::Secret;
-use tokio_postgres::NoTls;
+use secrecy::{ExposeSecret, Secret};
+use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
 
 use librhodos::telemetry::{get_subscriber, init_subscriber};
@@ -9,6 +13,50 @@ use librhodos::{
     migration::{self, DbUri},
     serve, settings,
 };
+
+pub struct TestUser {
+    pub name: String,
+    pub user_id: i64,
+    pub username: String,
+    pub password: Secret<String>,
+    pub account_id: i64,
+}
+
+impl TestUser {
+    pub fn generate_fake_user() -> Self {
+        Self {
+            user_id: 0,
+            name: Name().fake(),
+            username: SafeEmail().fake(),
+            password: Secret::from(Uuid::new_v4().to_string()),
+            account_id: 0,
+        }
+    }
+
+    async fn store(&mut self, client: &Client) {
+        // Create user
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.expose_secret().as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+        let uid = client
+            .execute(
+                r#"INSERT INTO "user" (name, email, password, confirmed) VALUES ($1, $2, $3, $4);"#,
+                &[&self.name, &self.username, &password_hash, &false],
+            )
+            .await
+            .expect("failed to store generated test user");
+        self.user_id = uid as i64;
+
+        // Create account
+        self.account_id = add_test_account(client, self.user_id).await;
+    }
+}
 
 pub struct ConfirmationLinks {
     pub html: reqwest::Url,
@@ -19,6 +67,7 @@ pub struct TestState {
     pub app_address: String,
     pub db_name: String,
     pub port: u16,
+    pub test_user: TestUser,
 }
 
 impl TestState {
@@ -35,8 +84,10 @@ impl TestState {
     pub async fn content_post(&self, body: &serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/content", self.app_address))
-            // Random creds!!
-            .basic_auth(Uuid::new_v4().to_string(), Some(Uuid::new_v4().to_string()))
+            .basic_auth(
+                &self.test_user.username,
+                Some(self.test_user.password.expose_secret()),
+            )
             .json(&body)
             .send()
             .await
@@ -119,6 +170,15 @@ pub async fn connect_to_db(db_name: &str) -> tokio_postgres::Client {
     client
 }
 
+pub async fn add_test_account(client: &Client, user_id: i64) -> i64 {
+    let res = client
+        .execute(r#"INSERT INTO account(user_id) VALUES($1);"#, &[&user_id])
+        .await
+        .expect("query to add an account failed");
+
+    res as i64
+}
+
 pub async fn spawn_app() -> TestState {
     // Initialize tracing stack
     Lazy::force(&TRACING);
@@ -153,10 +213,15 @@ pub async fn spawn_app() -> TestState {
     let port = listener.local_addr().unwrap().port();
 
     let _ = tokio::spawn(serve(router, listener));
+    let client = connect_to_db(&global_config.database.db_name.clone()).await;
 
-    TestState {
+    let mut res = TestState {
         app_address: format!("http://localhost:{}", port),
-        db_name: global_config.database.db_name,
+        db_name: global_config.database.db_name.clone(),
         port: port,
-    }
+        test_user: TestUser::generate_fake_user(),
+    };
+    res.test_user.store(&client).await;
+
+    res
 }

@@ -12,7 +12,7 @@ async fn add_user_valid_form_data_200() {
     let state = spawn_app().await;
 
     // Act
-    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example";
+    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a";
     let response = state.post_user(body.to_string()).await;
 
     // Assert
@@ -29,13 +29,16 @@ async fn add_user_persists_new_user() {
     let state = spawn_app().await;
 
     // Act
-    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example";
+    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a";
     let _ = state.post_user(body.to_string()).await;
 
     // Assert
     let client = connect_to_db(&state.db_name).await;
     let row = client
-        .query(r#"SELECT name, email, confirmed FROM "user";"#, &[])
+        .query(
+            r#"SELECT name, email, confirmed FROM "user" WHERE email=$1;"#,
+            &[&"sonja@lowdelhi.example"],
+        )
         .await
         .expect("query to fetch row failed");
 
@@ -53,9 +56,13 @@ async fn add_user_missing_form_data_400() {
     // Arrange
     let state = spawn_app().await;
     let test_cases = vec![
-        ("name=Sonja%20Hemphill", "missing email"),
-        ("email=sonja%40lowdelhi.example", "missing name"),
-        ("", "missing name and email"),
+        ("name=Sonja%20Hemphill&password=a", "missing email"),
+        ("email=sonja%40lowdelhi.example&password=a", "missing name"),
+        (
+            "email=sonja%40lowdelhi.example&name=Sonja%20Hemphill",
+            "missing password",
+        ),
+        ("", "missing name, email, and password"),
     ];
 
     for (invalid_data, msg_err) in test_cases {
@@ -80,7 +87,7 @@ async fn add_user_sends_confirmation_with_link() {
     let user_name: String = Name(EN).fake();
 
     // Act
-    let post_body = format!("name={}&email={}", user_name, user_email);
+    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert
@@ -120,7 +127,7 @@ async fn add_user_token_fails_if_fatal_db_err() {
         .expect("query to alter user_token table failed");
 
     // Act
-    let post_body = format!("name={}&email={}", user_name, user_email);
+    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert
@@ -141,7 +148,7 @@ async fn insert_user_fails_if_fatal_db_err() {
         .expect("query to alter user table failed");
 
     // Act
-    let post_body = format!("name={}&email={}", user_name, user_email);
+    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert

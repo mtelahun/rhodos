@@ -1,5 +1,6 @@
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use secrecy::ExposeSecret;
 use uuid::Uuid;
 
 use crate::helpers::{connect_to_db, spawn_app};
@@ -80,22 +81,11 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
 }
 
 #[tokio::test]
-pub async fn post_less_than_501_chars_is_ok_200() {
+pub async fn happy_path_less_than_501_chars_is_ok_200() {
     // Arrange
     let state = spawn_app().await;
     let client = connect_to_db(&state.db_name.clone()).await;
-    client
-        .execute(
-            r#"INSERT INTO account(email) VALUES('test@mail.com');"#,
-            &[],
-        )
-        .await
-        .expect("query to add an account failed");
-    let row = client
-        .query_one("SELECT id FROM account WHERE email='test@mail.com';", &[])
-        .await
-        .expect("query to retrieve just added account failed");
-    let account_id: i64 = row.get(0);
+    let account_id = state.test_user.account_id;
 
     // Act
     let msg = generate_random_data(500);
@@ -143,18 +133,7 @@ async fn post_content_fails_if_fatal_db_err() {
     // Arrange
     let state = spawn_app().await;
     let client = connect_to_db(&state.db_name.clone()).await;
-    client
-        .execute(
-            r#"INSERT INTO account(email) VALUES('test@mail.com');"#,
-            &[],
-        )
-        .await
-        .expect("query to add an account failed");
-    let row = client
-        .query_one("SELECT id FROM account WHERE email='test@mail.com';", &[])
-        .await
-        .expect("query to retrieve just added account failed");
-    let account_id: i64 = row.get(0);
+    let account_id: i64 = state.test_user.account_id;
     // Sabotage the database
     client
         .execute(r#"ALTER TABLE content DROP COLUMN "body";"#, &[])
@@ -178,19 +157,7 @@ async fn post_content_fails_if_fatal_db_err() {
 async fn request_missing_authorization_rejected_401() {
     // Arrange
     let state = spawn_app().await;
-    let client = connect_to_db(&state.db_name.clone()).await;
-    client
-        .execute(
-            r#"INSERT INTO account(email) VALUES('test@mail.com');"#,
-            &[],
-        )
-        .await
-        .expect("query to add an account failed");
-    let row = client
-        .query_one("SELECT id FROM account WHERE email='test@mail.com';", &[])
-        .await
-        .expect("query to retrieve just added account failed");
-    let account_id: i64 = row.get(0);
+    let account_id = state.test_user.account_id;
 
     // Act
     let body = serde_json::json!({
@@ -217,6 +184,77 @@ async fn request_missing_authorization_rejected_401() {
         r#"Basic realm="publish""#,
         "Basic authentication"
     )
+}
+
+#[tokio::test]
+async fn non_existing_user_is_401_unauthorized() {
+    // Arrange
+    let state = spawn_app().await;
+    let username = Uuid::new_v4().to_string();
+    let password = Uuid::new_v4().to_string();
+
+    // Act
+    let response = reqwest::Client::new()
+        .post(&format!("{}/content", &state.app_address))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+            "content": {
+                "text": "Some text",
+                "publisher_id": 1,
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to post reqwest");
+
+    // Assert
+    assert_eq!(
+        response.status().as_u16(),
+        401,
+        "The attempt to create content is rejected; it couldn't authenticate the user"
+    );
+    assert_eq!(
+        response.headers()["WWW-Authenticate"],
+        r#"Basic realm="publish""#
+    );
+}
+
+#[tokio::test]
+async fn invalid_password_is_401_unauthorized() {
+    // Arrange
+    let state = spawn_app().await;
+    let username = &state.test_user.username;
+    let password = Uuid::new_v4().to_string();
+    assert_ne!(
+        password,
+        state.test_user.password.expose_secret().to_string(),
+        "random password does not equal actual password"
+    );
+
+    // Act
+    let response = reqwest::Client::new()
+        .post(&format!("{}/content", &state.app_address))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+            "content": {
+                "text": "Some text",
+                "publisher_id": 1,
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to post reqwest");
+
+    // Assert
+    assert_eq!(
+        response.status().as_u16(),
+        401,
+        "The attempt to create content is rejected; it couldn't authenticate the user"
+    );
+    assert_eq!(
+        response.headers()["WWW-Authenticate"],
+        r#"Basic realm="publish""#
+    );
 }
 
 fn generate_random_data(len: usize) -> String {
