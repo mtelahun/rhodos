@@ -17,7 +17,8 @@ impl MigrationTrait for Migration {
 CREATE TABLE "user" (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR NOT NULL,
-    email VARCHAR,
+    email VARCHAR NOT NULL UNIQUE,
+    password VARCHAR NOT NULL,
     confirmed BOOL NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );"#;

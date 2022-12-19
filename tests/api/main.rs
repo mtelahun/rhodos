@@ -1,3 +1,4 @@
+mod content;
 mod email_client;
 mod health_check;
 mod helpers;

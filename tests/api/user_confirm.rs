@@ -27,7 +27,7 @@ async fn confirmation_link_works_200() {
     let user_email: String = SafeEmail().fake();
     let user_name: String = Name(EN).fake();
 
-    let post_body = format!("name={}&email={}", user_name, user_email);
+    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
     let response = state.post_user(post_body.to_string()).await;
 
     assert_eq!(
@@ -66,7 +66,7 @@ async fn confirmation_link_confirms_added_user() {
     let user_name: String = Name(EN).fake();
 
     // Act
-    let post_body = format!("name={}&email={}", user_name, user_email);
+    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
     let response = state.post_user(post_body.to_string()).await;
     assert_eq!(
         200,
@@ -79,7 +79,10 @@ async fn confirmation_link_confirms_added_user() {
     // Assert
     let client = connect_to_db(&state.db_name).await;
     let row = client
-        .query(r#"SELECT name, email, confirmed FROM "user";"#, &[])
+        .query(
+            r#"SELECT name, email, confirmed FROM "user" WHERE email=$1;"#,
+            &[&user_email],
+        )
         .await
         .expect("query to fetch user row failed");
     // check status of user

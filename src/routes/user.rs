@@ -9,6 +9,7 @@ use axum::{
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, EntityTrait, Set, TransactionTrait};
+use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -25,6 +26,7 @@ use crate::{
 pub struct InputUser {
     name: String,
     email: String,
+    password: String,
 }
 
 #[tracing::instrument(
@@ -127,7 +129,8 @@ fn generate_confirmation_token() -> String {
 async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i64, DbErr> {
     let data = user::ActiveModel {
         name: Set(new_user.name.as_ref().to_string()),
-        email: Set(Some(new_user.email.as_ref().to_string())),
+        email: Set(new_user.email.as_ref().to_string()),
+        password: Set(new_user.password.expose_secret().clone()),
         confirmed: Set(false),
         ..Default::default()
     };
@@ -139,7 +142,12 @@ async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i
 fn parse_user(form: &InputUser) -> Result<NewUser, String> {
     let name = UserName::parse(form.name.clone())?;
     let email = UserEmail::parse(form.email.clone())?;
-    Ok(NewUser { name, email })
+    let password = Secret::from(form.password.clone());
+    Ok(NewUser {
+        name,
+        email,
+        password,
+    })
 }
 
 #[tracing::instrument(name = "Store new user confirmation token", skip(user_id, token, db))]
