@@ -2,14 +2,18 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use once_cell::sync::OnceCell;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
+use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::trace::TraceLayer;
 
 pub mod content;
 pub mod health_check;
 pub mod index;
+pub mod login;
 pub mod test;
 pub mod user;
 pub mod user_confirm;
@@ -20,13 +24,16 @@ use index::index;
 use crate::{entities::instance, error::TenantMapError};
 use crate::{entities::prelude::*, settings::Settings};
 
+const FLASH_COOKIE: &str = "_flash";
+static FLASH_KEY: OnceCell<Key> = OnceCell::new();
+
 #[derive(Clone, Debug)]
 pub struct TenantData {
     domain: String,
     db: DatabaseConnection,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AppState {
     domain: String,
     rhodos_db: Option<DatabaseConnection>,
@@ -38,19 +45,29 @@ pub async fn create_routes(
     db: DatabaseConnection,
     global_config: &Settings,
 ) -> Result<Router, String> {
-    let shared_state = Arc::new(AppState {
+    // The key will only be valid until the server is restarted,
+    // but since we intend to use it for flash cookies only (which
+    // last seconds, at most) this is fine.
+    let _ = FLASH_KEY.set(Key::from(generate_random_key(64).as_bytes()));
+
+    let shared_state = AppState {
         domain: global_config.server.domain.clone(),
         rhodos_db: Some(db),
         global_config: global_config.clone(),
         host_db_map: Arc::new(RwLock::new(HashMap::new())),
-    });
+    };
 
     let router = Router::new()
         .route("/", get(index))
         .route("/content", post(content::create))
         .route("/health_check", get(health_check))
+        .route(
+            "/login",
+            get(login::get::login_form).post(login::post::login),
+        )
         .route("/user", post(user::create))
         .route("/user/confirm", get(user_confirm::confirm))
+        .layer(CookieManagerLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 
@@ -59,7 +76,7 @@ pub async fn create_routes(
 
 pub async fn get_db_from_host(
     host: &str,
-    state: &Arc<AppState>,
+    state: &AppState,
 ) -> Result<DatabaseConnection, TenantMapError> {
     let mut split = host.split(':');
     let mut key = "".to_string();
@@ -79,7 +96,7 @@ pub async fn get_db_from_host(
     }
 }
 
-async fn map_get(key: &String, state: &Arc<AppState>) -> Result<TenantData, TenantMapError> {
+async fn map_get(key: &String, state: &AppState) -> Result<TenantData, TenantMapError> {
     // Scope our RwLock
     {
         // Happy path: tenant is already in the Map
@@ -115,7 +132,7 @@ async fn map_get(key: &String, state: &Arc<AppState>) -> Result<TenantData, Tena
 async fn map_set(
     domain: &str,
     db_url: &str,
-    state: &Arc<AppState>,
+    state: &AppState,
 ) -> Result<TenantData, TenantMapError> {
     let db = Database::connect(db_url)
         .await
@@ -177,4 +194,41 @@ fn make_db_uri(inst: &instance::Model) -> String {
     );
     println!("db_uri = {}", res);
     res
+}
+
+fn generate_random_key(length: usize) -> String {
+    let mut rng = thread_rng();
+    std::iter::repeat_with(|| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(length)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_length_is_variable() {
+        let cases = [(25, "25 chars"), (64, "64 chars")];
+        for (length, msg) in cases {
+            let token = generate_random_key(length);
+            assert_eq!(token.len(), length, "Key length is {}", msg);
+        }
+    }
+
+    #[test]
+    fn key_does_not_include_invalid_chars() {
+        let invalid_chars = vec![
+            ":", "/", "?", "#", "[", "]", "@", "!", "$", "&", "'", "(", ")", "*", "+", ",", ";",
+            "=",
+        ];
+        let token = generate_random_key(50);
+        for c in invalid_chars {
+            assert!(
+                !token.contains(c),
+                "Confirmation token does not contain any invalid chars"
+            );
+        }
+    }
 }

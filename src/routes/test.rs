@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::routes::get_db_from_host;
 use crate::{entities::prelude::*, error::TenantMapError};
 use axum::{extract::Host, http::StatusCode, Extension};
@@ -11,7 +9,7 @@ use super::AppState;
 #[debug_handler]
 pub async fn proxy(
     Host(host): Host,
-    Extension(state): Extension<Arc<AppState>>,
+    Extension(state): Extension<AppState>,
 ) -> Result<String, StatusCode> {
     let hst = host.to_string();
     println!("hst = {}", hst);

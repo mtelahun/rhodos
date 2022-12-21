@@ -3,6 +3,7 @@ use sea_orm::{Database, DatabaseConnection};
 use settings::Settings;
 use std::net::TcpListener;
 
+pub mod authentication;
 pub mod db;
 pub mod domain;
 pub mod email_client;

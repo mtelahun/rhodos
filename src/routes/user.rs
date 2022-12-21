@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use axum::{
     extract::{Host, State},
@@ -7,13 +5,12 @@ use axum::{
     response::IntoResponse,
     Form,
 };
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, EntityTrait, Set, TransactionTrait};
 use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{get_db_from_host, AppState};
+use super::{generate_random_key, get_db_from_host, AppState};
 use crate::{
     domain::{user_email::UserEmail, NewUser, UserName},
     email_client::EmailClient,
@@ -40,7 +37,7 @@ pub struct InputUser {
 )]
 pub async fn create(
     Host(host): Host,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Form(form): Form<InputUser>,
 ) -> Result<(), UserError> {
     let hst = host.to_string();
@@ -50,7 +47,7 @@ pub async fn create(
     })?;
 
     let new_user = parse_user(&form)?;
-    let token = generate_confirmation_token();
+    let token = generate_random_key(25);
 
     // Transaction: find the token, update the user, remove token
     let new_user2 = new_user.clone();
@@ -83,7 +80,7 @@ pub async fn create(
 )]
 pub async fn send_confirmation_email(
     new_user: &NewUser,
-    state: &Arc<AppState>,
+    state: &AppState,
     token: &str,
 ) -> Result<(), EmailTokenError> {
     let confirmation_link = format!(
@@ -116,14 +113,6 @@ pub async fn send_confirmation_email(
         .await?;
 
     Ok(())
-}
-
-fn generate_confirmation_token() -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(25)
-        .collect()
 }
 
 async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i64, DbErr> {
@@ -237,31 +226,5 @@ pub struct StoreTokenError(#[from] DbErr);
 impl std::fmt::Debug for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         error_chain_fmt(self, f)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn confirmation_token_is_25_chars() {
-        let token = generate_confirmation_token();
-        assert_eq!(token.len(), 25, "Confirmation token is 25 chars long");
-    }
-
-    #[test]
-    fn confirmation_token_does_not_include_invalid_chars() {
-        let invalid_chars = vec![
-            ":", "/", "?", "#", "[", "]", "@", "!", "$", "&", "'", "(", ")", "*", "+", ",", ";",
-            "=",
-        ];
-        let token = generate_confirmation_token();
-        for c in invalid_chars {
-            assert!(
-                !token.contains(c),
-                "Confirmation token does not contain any invalid chars"
-            );
-        }
     }
 }

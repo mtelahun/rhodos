@@ -1,3 +1,5 @@
-pub async fn index() -> String {
-    "hello world".to_string()
+use axum::response::Html;
+
+pub async fn index() -> Html<&'static str> {
+    Html(include_str!("index.html"))
 }
