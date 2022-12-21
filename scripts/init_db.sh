@@ -23,11 +23,22 @@ DB_PASSWORD="${POSTGRES_PASSWORD:=password}"
 DB_NAME="${POSTGRES_DB:=postgres}"
 # Check if a custom port has been set, otherwise default to '5432'
 DB_PORT="${POSTGRES_PORT:=5432}"
+
+# if a container is already running, print instructions to kill it and exit
+RUNNING_CONTAINER=$(docker ps --filter "name=postgres*" --format '{{.ID}}')
+if [[ -n $RUNNING_CONTAINER ]]; then
+    echo >&2 "there is a PostgreSQL container already running, kill it with"
+    echo >&2 "
+        docker kill ${RUNNING_CONTAINER}"
+    exit 1
+fi
+
 # Launch postgres using Docker
 # Allow to skip Docker if a dockerized Postgres database is already running
 if [[ -z "${SKIP_DOCKER}" ]]
 then
     docker run \
+        --name "postgres_$(date '+%s')" \
         -e POSTGRES_USER=${DB_USER} \
         -e POSTGRES_PASSWORD=${DB_PASSWORD} \
         -e POSTGRES_DB=${DB_NAME} \
