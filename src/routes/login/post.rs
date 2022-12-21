@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     Form,
 };
+use axum_sessions::extractors::WritableSession;
 use cookie::{time::Duration, SameSite};
 use secrecy::Secret;
 use serde::Deserialize;
@@ -29,6 +30,7 @@ pub struct FormData {
 pub async fn login(
     Host(host): Host,
     State(state): State<AppState>,
+    mut session: WritableSession,
     cookies: Cookies,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, LoginError> {
@@ -44,7 +46,6 @@ pub async fn login(
     };
     tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
 
-    let redirect_location = "/";
     let user_id = validate_credentials(credentials, &conn)
         .await
         .map_err(|e| match e {
@@ -54,9 +55,14 @@ pub async fn login(
             }
             AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
         })?;
+    session.regenerate();
+    session.insert("user_id", user_id).map_err(|e| {
+        set_flash_cookie(&cookies, "session_setup_error");
+        LoginError::UnexpectedError(anyhow!(e))
+    })?;
 
     tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-    Ok(Redirect::to(redirect_location))
+    Ok(Redirect::to("/admin/dashboard"))
 }
 
 fn set_flash_cookie(cookies: &Cookies, value: &str) {
@@ -100,7 +106,7 @@ impl IntoResponse for LoginError {
                     .into_response()
             }
             Self::UnexpectedError(e) => {
-                tracing::info!("an unexpected error occured");
+                tracing::error!("an unexpected error occured");
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response()
             }
         }

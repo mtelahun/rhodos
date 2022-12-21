@@ -1,7 +1,9 @@
+use async_redis_session::RedisSessionStore;
 use axum::{
     routing::{get, post},
     Router,
 };
+use axum_sessions::{SameSite, SessionLayer};
 use once_cell::sync::OnceCell;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
@@ -10,6 +12,7 @@ use tokio::sync::RwLock;
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::trace::TraceLayer;
 
+pub mod admin;
 pub mod content;
 pub mod health_check;
 pub mod index;
@@ -23,6 +26,8 @@ use index::index;
 
 use crate::{entities::instance, error::TenantMapError};
 use crate::{entities::prelude::*, settings::Settings};
+
+use self::admin::dashboard::admin_dashboard;
 
 const FLASH_COOKIE: &str = "_flash";
 static FLASH_KEY: OnceCell<Key> = OnceCell::new();
@@ -45,10 +50,19 @@ pub async fn create_routes(
     db: DatabaseConnection,
     global_config: &Settings,
 ) -> Result<Router, String> {
-    // The key will only be valid until the server is restarted,
+    // This key will only be valid until the server is restarted,
     // but since we intend to use it for flash cookies only (which
     // last seconds, at most) this is fine.
     let _ = FLASH_KEY.set(Key::from(generate_random_key(64).as_bytes()));
+
+    let session_store = RedisSessionStore::new("redis://127.0.0.1/").map_err(|e| e.to_string())?;
+    let session_key = [0u8; 64];
+    let session_layer = SessionLayer::new(session_store, &session_key)
+        .with_cookie_domain("localhost")
+        .with_cookie_path("/")
+        .with_same_site_policy(SameSite::Lax)
+        .with_session_ttl(Some(std::time::Duration::from_secs(60 * 60 * 24 * 7)))
+        .with_secure(false);
 
     let shared_state = AppState {
         domain: global_config.server.domain.clone(),
@@ -59,15 +73,17 @@ pub async fn create_routes(
 
     let router = Router::new()
         .route("/", get(index))
+        .route("/admin/dashboard", get(admin_dashboard))
         .route("/content", post(content::create))
-        .route("/health_check", get(health_check))
         .route(
             "/login",
             get(login::get::login_form).post(login::post::login),
         )
+        .layer(session_layer)
+        .layer(CookieManagerLayer::new())
+        .route("/health_check", get(health_check))
         .route("/user", post(user::create))
         .route("/user/confirm", get(user_confirm::confirm))
-        .layer(CookieManagerLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 

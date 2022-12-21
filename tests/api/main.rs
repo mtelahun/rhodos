@@ -1,3 +1,4 @@
+mod admin_dashboard;
 mod content;
 mod email_client;
 mod health_check;

@@ -72,6 +72,18 @@ pub struct TestState {
 }
 
 impl TestState {
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/dashboard", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get admin dashboard")
+    }
+
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
+    }
+
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
     where
         Body: serde::Serialize,
@@ -204,8 +216,17 @@ pub async fn add_test_account(client: &Client, user_id: i64) -> i64 {
 }
 
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
-    assert_eq!(response.status().as_u16(), 303);
-    assert_eq!(response.headers().get("Location").unwrap(), location)
+    assert_eq!(
+        response.status().as_u16(),
+        303,
+        "received https status code: Redirect 303"
+    );
+    assert_eq!(
+        response.headers().get("Location").unwrap(),
+        location,
+        "redirect location is: {}",
+        location
+    )
 }
 
 pub async fn spawn_app() -> TestState {
