@@ -27,6 +27,7 @@ pub struct Server {
     pub port: u16,
     pub log_level: String,
     pub base_url: String,
+    pub redis_uri: Secret<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
