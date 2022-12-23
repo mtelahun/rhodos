@@ -8,7 +8,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, Tr
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{get_db_from_host, AppState};
+use super::super::{get_db_from_host, AppState};
 use crate::{
     entities::{prelude::*, user, user_token},
     error::error_chain_fmt,

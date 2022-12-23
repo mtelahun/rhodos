@@ -4,6 +4,7 @@ use settings::Settings;
 use std::net::TcpListener;
 
 pub mod authentication;
+pub mod cookies;
 pub mod db;
 pub mod domain;
 pub mod email_client;

@@ -10,7 +10,7 @@ use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{generate_random_key, get_db_from_host, AppState};
+use super::super::{generate_random_key, get_db_from_host, AppState};
 use crate::{
     domain::{user_email::UserEmail, NewUser, UserName},
     email_client::EmailClient,

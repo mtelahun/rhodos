@@ -1,0 +1,70 @@
+use anyhow::anyhow;
+use axum::{
+    extract::{Host, State},
+    response::Redirect,
+    Form,
+};
+use axum_sessions::extractors::ReadableSession;
+use secrecy::{ExposeSecret, Secret};
+use serde::Deserialize;
+use tower_cookies::Cookies;
+
+use super::ResetError;
+use crate::{
+    authentication::{change_password, AuthError},
+    cookies::set_flash_cookie,
+    routes::{get_db_from_host, AppState},
+};
+
+#[derive(Debug, Deserialize)]
+pub struct FormData {
+    current_password: Secret<String>,
+    password: Secret<String>,
+    confirm_password: Secret<String>,
+}
+
+pub async fn change(
+    Host(host): Host,
+    State(state): State<AppState>,
+    cookies: Cookies,
+    session: ReadableSession,
+    Form(form): Form<FormData>,
+) -> Result<Redirect, ResetError> {
+    let hst = host.to_string();
+    let conn = get_db_from_host(&hst, &state)
+        .await
+        .map_err(|e| ResetError::UnexpectedError(e.into()))?;
+
+    // These are obvious errors
+    if form.password.expose_secret().is_empty() {
+        set_flash_cookie(&cookies, "password_reset_fail_empty");
+        return Err(ResetError::EmptyPasswordFail(
+            "empty password string".to_string(),
+        ));
+    } else if form.confirm_password.expose_secret() != form.password.expose_secret() {
+        set_flash_cookie(&cookies, "password_reset_fail_mismatch");
+        return Err(ResetError::ConfirmPasswordFail(
+            "new password mismatch".to_string(),
+        ));
+    }
+
+    let user_id: i64 = session.get::<i64>("user_id").unwrap_or(0);
+    if user_id == 0 {
+        return Err(ResetError::NoSession(anyhow!(
+            "no user_id found in session"
+        )));
+    }
+
+    change_password(user_id, form.current_password, form.password, &conn)
+        .await
+        .map_err(|e| match e {
+            AuthError::CurrentPasswordFail(_) => {
+                set_flash_cookie(&cookies, "password_reset_fail_current");
+                ResetError::CurrentPasswordFail(e.to_string())
+            }
+            _ => ResetError::UnexpectedError(e.into()),
+        })?;
+
+    set_flash_cookie(&cookies, "password_reset_ok");
+    Ok(Redirect::to("/user/change-password"))
+}

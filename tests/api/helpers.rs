@@ -84,6 +84,30 @@ impl TestState {
         self.get_admin_dashboard().await.text().await.unwrap()
     }
 
+    pub async fn get_password_reset(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/user/change-password", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get reset password")
+    }
+
+    pub async fn get_password_reset_html(&self) -> String {
+        self.get_password_reset().await.text().await.unwrap()
+    }
+
+    pub async fn post_password_reset<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/user/change-password", &self.app_address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to get reset password")
+    }
+
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
     where
         Body: serde::Serialize,
@@ -94,6 +118,14 @@ impl TestState {
             .send()
             .await
             .expect("Failed to execute request")
+    }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/user/logout", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to execute logout request.")
     }
 
     pub async fn post_user(&self, body: String) -> reqwest::Response {

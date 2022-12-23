@@ -4,7 +4,6 @@ use axum::{
     Router,
 };
 use axum_sessions::{SameSite, SessionLayer};
-use once_cell::sync::OnceCell;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
 use std::{collections::HashMap, sync::Arc};
@@ -19,18 +18,20 @@ pub mod index;
 pub mod login;
 pub mod test;
 pub mod user;
-pub mod user_confirm;
 
+use admin::dashboard::admin_dashboard;
 use health_check::health_check;
 use index::index;
+use user::change_password::get::password_reset;
+use user::change_password::post::change;
+use user::logout::logout;
 
-use crate::{entities::instance, error::TenantMapError};
-use crate::{entities::prelude::*, settings::Settings};
-
-use self::admin::dashboard::admin_dashboard;
-
-const FLASH_COOKIE: &str = "_flash";
-static FLASH_KEY: OnceCell<Key> = OnceCell::new();
+use crate::{
+    cookies::FLASH_KEY,
+    entities::{instance, prelude::*},
+    error::TenantMapError,
+    settings::Settings,
+};
 
 #[derive(Clone, Debug)]
 pub struct TenantData {
@@ -79,11 +80,13 @@ pub async fn create_routes(
             "/login",
             get(login::get::login_form).post(login::post::login),
         )
+        .route("/user/change-password", get(password_reset).post(change))
+        .route("/user/logout", post(logout))
         .layer(session_layer)
         .layer(CookieManagerLayer::new())
         .route("/health_check", get(health_check))
-        .route("/user", post(user::create))
-        .route("/user/confirm", get(user_confirm::confirm))
+        .route("/user", post(user::create::create))
+        .route("/user/confirm", get(user::confirm::confirm))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 

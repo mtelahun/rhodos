@@ -57,7 +57,7 @@ pub async fn create(
         .await
         .map_err(|e| match e {
             AuthError::InvalidCredentials(_) => ContentError::AuthError(e.into()),
-            AuthError::UnexpectedError(_) => ContentError::UnexpectedError(e.into()),
+            _ => ContentError::UnexpectedError(e.into()),
         })?;
     let account_id = body.content.publisher_id;
     let new_content = body.content.text;

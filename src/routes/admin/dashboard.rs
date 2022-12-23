@@ -44,6 +44,15 @@ pub async fn admin_dashboard(
     </head>
     <body>
         <p>Welcome {user_name}!</p>
+        <p>Actions:</p>
+        <ol>
+            <li><a href="/user/change-password">Change your password</a></li>
+            <li>
+                <form name="logoutForm" action="/user/logout" method="post">
+                    <input type="submit" value="Logout" />
+                </form>
+            </li>
+            </ol>
     </body>
 </html>"#
     )))

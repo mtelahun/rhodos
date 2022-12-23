@@ -6,15 +6,15 @@ use axum::{
     Form,
 };
 use axum_sessions::extractors::WritableSession;
-use cookie::{time::Duration, SameSite};
 use secrecy::Secret;
 use serde::Deserialize;
-use tower_cookies::{Cookie, Cookies};
+use tower_cookies::Cookies;
 
 use crate::{
     authentication::{validate_credentials, AuthError, Credentials},
+    cookies::set_flash_cookie,
     error::{error_chain_fmt, TenantMapError},
-    routes::{get_db_from_host, AppState, FLASH_COOKIE, FLASH_KEY},
+    routes::{get_db_from_host, AppState},
 };
 
 #[derive(Deserialize)]
@@ -53,7 +53,7 @@ pub async fn login(
                 set_flash_cookie(&cookies, "invalid_creds");
                 LoginError::AuthError(e.into())
             }
-            AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
+            _ => LoginError::UnexpectedError(e.into()),
         })?;
     session.regenerate();
     session.insert("user_id", user_id).map_err(|e| {
@@ -63,21 +63,6 @@ pub async fn login(
 
     tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
     Ok(Redirect::to("/admin/dashboard"))
-}
-
-fn set_flash_cookie(cookies: &Cookies, value: &str) {
-    let key = FLASH_KEY.get().unwrap();
-    let private_cookies = cookies.private(key);
-    private_cookies.add(
-        Cookie::build(FLASH_COOKIE, value.to_string())
-            .max_age(Duration::seconds(1))
-            .http_only(true)
-            .same_site(SameSite::Lax)
-            .domain("localhost")
-            .path("/")
-            .secure(false)
-            .finish(),
-    );
 }
 
 #[derive(thiserror::Error)]
