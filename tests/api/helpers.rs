@@ -141,10 +141,6 @@ impl TestState {
     pub async fn post_content(&self, body: &serde_json::Value) -> reqwest::Response {
         self.api_client
             .post(&format!("{}/content", self.app_address))
-            .basic_auth(
-                &self.test_user.username,
-                Some(self.test_user.password.expose_secret()),
-            )
             .json(&body)
             .send()
             .await

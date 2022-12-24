@@ -1,9 +1,8 @@
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use secrecy::ExposeSecret;
-use uuid::Uuid;
 
-use crate::helpers::{connect_to_db, spawn_app};
+use crate::helpers::{assert_is_redirect_to, connect_to_db, spawn_app};
 
 #[tokio::test]
 pub async fn invalid_json_is_bad_request_422() {
@@ -65,6 +64,13 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
             "post greater than 500 chars",
         ),
     ];
+    // Login
+    let body = serde_json::json!({
+        "username": &state.test_user.username,
+        "password": &state.test_user.password.expose_secret()
+    });
+    let response = state.post_login(&body).await;
+    assert_is_redirect_to(&response, "/admin/dashboard");
 
     for (case, desc) in invalid_cases {
         // Act
@@ -86,6 +92,13 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
     let state = spawn_app().await;
     let client = connect_to_db(&state.db_name.clone()).await;
     let account_id = state.test_user.account_id;
+    // Login
+    let body = serde_json::json!({
+        "username": &state.test_user.username,
+        "password": &state.test_user.password.expose_secret()
+    });
+    let response = state.post_login(&body).await;
+    assert_is_redirect_to(&response, "/admin/dashboard");
 
     // Act
     let msg = generate_random_data(500);
@@ -134,6 +147,13 @@ async fn post_content_fails_if_fatal_db_err() {
     let state = spawn_app().await;
     let client = connect_to_db(&state.db_name.clone()).await;
     let account_id: i64 = state.test_user.account_id;
+    // Login
+    let body = serde_json::json!({
+        "username": &state.test_user.username,
+        "password": &state.test_user.password.expose_secret()
+    });
+    let response = state.post_login(&body).await;
+    assert_is_redirect_to(&response, "/admin/dashboard");
     // Sabotage the database
     client
         .execute(r#"ALTER TABLE content DROP COLUMN "body";"#, &[])
@@ -154,7 +174,7 @@ async fn post_content_fails_if_fatal_db_err() {
 }
 
 #[tokio::test]
-async fn request_missing_authorization_rejected_401() {
+async fn request_missing_authorization_redirect_303() {
     // Arrange
     let state = spawn_app().await;
     let account_id = state.test_user.account_id;
@@ -166,95 +186,10 @@ async fn request_missing_authorization_rejected_401() {
             "publisher_id": account_id,
         }
     });
-    let response = reqwest::Client::new()
-        .post(&format!("{}/content", state.app_address))
-        .json(&body)
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = state.post_content(&body).await;
 
     // Assert
-    assert_eq!(
-        response.status().as_u16(),
-        401,
-        "missing creds return 401 Unauthorized"
-    );
-    assert_eq!(
-        response.headers()["WWW-Authenticate"],
-        r#"Basic realm="publish""#,
-        "Basic authentication"
-    )
-}
-
-#[tokio::test]
-async fn non_existing_user_is_401_unauthorized() {
-    // Arrange
-    let state = spawn_app().await;
-    let username = Uuid::new_v4().to_string();
-    let password = Uuid::new_v4().to_string();
-
-    // Act
-    let response = reqwest::Client::new()
-        .post(&format!("{}/content", &state.app_address))
-        .basic_auth(username, Some(password))
-        .json(&serde_json::json!({
-            "content": {
-                "text": "Some text",
-                "publisher_id": 1,
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to post reqwest");
-
-    // Assert
-    assert_eq!(
-        response.status().as_u16(),
-        401,
-        "The attempt to create content is rejected; it couldn't authenticate the user"
-    );
-    assert_eq!(
-        response.headers()["WWW-Authenticate"],
-        r#"Basic realm="publish""#
-    );
-}
-
-#[tokio::test]
-async fn invalid_password_is_401_unauthorized() {
-    // Arrange
-    let state = spawn_app().await;
-    let username = &state.test_user.username;
-    let password = Uuid::new_v4().to_string();
-    assert_ne!(
-        password,
-        state.test_user.password.expose_secret().to_string(),
-        "random password does not equal actual password"
-    );
-
-    // Act
-    let response = reqwest::Client::new()
-        .post(&format!("{}/content", &state.app_address))
-        .basic_auth(username, Some(password))
-        .json(&serde_json::json!({
-            "content": {
-                "text": "Some text",
-                "publisher_id": 1,
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to post reqwest");
-
-    // Assert
-    assert_eq!(
-        response.status().as_u16(),
-        401,
-        "The attempt to create content is rejected; it couldn't authenticate the user"
-    );
-    assert_eq!(
-        response.headers()["WWW-Authenticate"],
-        r#"Basic realm="publish""#
-    );
+    assert_is_redirect_to(&response, "/login")
 }
 
 fn generate_random_data(len: usize) -> String {
