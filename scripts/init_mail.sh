@@ -11,9 +11,5 @@ if [[ -n $RUNNING_CONTAINER ]]; then
 fi
 
 # Launch mailhog using Docker
-# Allow to skip Docker if a dockerized Mailhog is already running
-if [[ -z "${SKIP_DOCKER}" ]]
-then
-    docker run --name "mailhog_$(date '+%s')" -p 8025:8025 -p 1025:1025 -d \
-        mailhog/mailhog
-fi
+docker run --name "mailhog_$(date '+%s')" -p 8025:8025 -p 1025:1025 -d \
+    mailhog/mailhog

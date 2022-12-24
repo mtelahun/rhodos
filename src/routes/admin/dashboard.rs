@@ -1,4 +1,3 @@
-use anyhow::{anyhow, Context};
 use axum::{
     extract::{Host, State},
     http::StatusCode,
@@ -6,13 +5,14 @@ use axum::{
 };
 use axum_macros::debug_handler;
 use axum_sessions::extractors::ReadableSession;
-use sea_orm::{DatabaseConnection, EntityTrait};
 
-use crate::entities::prelude::User;
-use crate::error::error_chain_fmt;
-use crate::routes::{get_db_from_host, AppState};
+use crate::{
+    error::{error_chain_fmt, user_id_from_session_r, SessionError},
+    orm,
+    routes::{get_db_from_host, AppState},
+};
 
-#[tracing::instrument(name = "Admin dashboard", skip(host, state, session))]
+#[tracing::instrument(name = "Admin dashboard", skip(state, session))]
 #[debug_handler]
 pub async fn admin_dashboard(
     session: ReadableSession,
@@ -24,16 +24,11 @@ pub async fn admin_dashboard(
         .await
         .map_err(|e| AdminError::UnexpectedError(e.into()))?;
 
-    let user_id: i64 = session.get::<i64>("user_id").unwrap_or(0);
-    let user_name = if user_id != 0 {
-        get_username(user_id, &conn)
-            .await
-            .map_err(AdminError::UnexpectedError)?
-    } else {
-        return Err(AdminError::SessionError(anyhow!(
-            "unable to find user id in session store"
-        )));
-    };
+    let user_id = user_id_from_session_r(&session).await?;
+    let model = orm::get_user_model_by_id(user_id, &conn)
+        .await
+        .map_err(|e| AdminError::UnexpectedError(e.into()))?;
+    let user_name = model.name;
 
     Ok(Html(format!(
         r#"<!DOCTYPE html>
@@ -58,21 +53,10 @@ pub async fn admin_dashboard(
     )))
 }
 
-#[tracing::instrument(name = "Get username", skip(conn))]
-async fn get_username(user_id: i64, conn: &DatabaseConnection) -> Result<String, anyhow::Error> {
-    let model = User::find_by_id(user_id)
-        .one(conn)
-        .await
-        .context("Failed to retrieve a user record.")?
-        .unwrap();
-
-    Ok(model.name)
-}
-
 #[derive(thiserror::Error)]
 pub enum AdminError {
     #[error("session creation failed")]
-    SessionError(#[source] anyhow::Error),
+    SessionError(#[from] SessionError),
     #[error("an unexpected error occurred")]
     UnexpectedError(#[from] anyhow::Error),
 }

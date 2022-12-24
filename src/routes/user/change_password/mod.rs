@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use crate::error::error_chain_fmt;
+use crate::error::{error_chain_fmt, SessionError};
 
 pub mod get;
 pub mod post;
@@ -17,8 +17,8 @@ pub enum ResetError {
     CurrentPasswordFail(String),
     #[error("new password is an empty string")]
     EmptyPasswordFail(String),
-    #[error("does this user have a session?")]
-    NoSession(#[source] anyhow::Error),
+    #[error("no session: {0}")]
+    NoSession(#[from] SessionError),
     #[error("an unexpected error occurred")]
     UnexpectedError(#[from] anyhow::Error),
 }

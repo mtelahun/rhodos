@@ -2,13 +2,10 @@ use anyhow::{anyhow, Context};
 use argon2::{
     password_hash::SaltString, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
 };
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, Set};
+use sea_orm::{DatabaseConnection, IntoActiveModel, Set};
 use secrecy::{ExposeSecret, Secret};
 
-use crate::{
-    entities::{prelude::*, user},
-    telemetry::spawn_blocking_with_tracing,
-};
+use crate::{error::error_chain_fmt, orm, telemetry::spawn_blocking_with_tracing};
 
 #[derive(Clone, Debug)]
 pub struct Credentials {
@@ -23,15 +20,16 @@ pub async fn change_password(
     new_password: Secret<String>,
     conn: &DatabaseConnection,
 ) -> Result<(), AuthError> {
-    let username = get_username_by_id(user_id, conn)
+    let model = orm::get_user_model_by_id(user_id, conn)
         .await
         .context("Failed to get get username from id,")?;
+    let username = model.email;
 
     let mut credentials = Credentials {
         username,
         password: current_password,
     };
-    let current_password_matches = current_password_ok(credentials.clone(), conn).await?;
+    let current_password_matches = password_ok(credentials.clone(), conn).await?;
     if !current_password_matches {
         return Err(AuthError::CurrentPasswordFail(anyhow::anyhow!(
             "current password does not match"
@@ -47,7 +45,7 @@ pub async fn change_password(
 }
 
 #[tracing::instrument(name = "Check current password matches", skip(credentials, conn))]
-pub async fn current_password_ok(
+pub async fn password_ok(
     credentials: Credentials,
     conn: &DatabaseConnection,
 ) -> Result<bool, AuthError> {
@@ -77,20 +75,16 @@ pub async fn update_credential(
     .unwrap()
     .to_string();
 
-    let mut db_user = User::find_by_id(user_id)
-        .one(conn)
+    let mut orm_user = orm::get_user_model_by_id(user_id, conn)
         .await
         .context("Failed to retrieve the user record.")?
-        .unwrap()
         .into_active_model();
-    db_user.password = Set(password_hash);
-    let res = User::update(db_user)
-        .filter(user::Column::Id.eq(user_id))
-        .exec(conn)
+    orm_user.password = Set(password_hash);
+    let user_id = orm::update_credential(user_id, orm_user, conn)
         .await
         .context("Failed to update user record")?;
 
-    Ok(res.id)
+    Ok(user_id)
 }
 
 #[tracing::instrument(name = "Validate credentials", skip(credentials, conn))]
@@ -108,15 +102,16 @@ pub async fn validate_credentials(
         CWOrkoo7oJBQ/iyh7uJ0LO2aLEfrHwTWllSAxT0zRno"
             .to_string(),
     );
-    let mut db_password_hash = dummy_hash.clone();
+
+    let db_password_hash;
     if let Some((stored_uid, stored_hash)) = get_stored_credentials(&credentials.username, conn)
         .await
         .map_err(|e| AuthError::UnexpectedError(anyhow!(e)))?
     {
         user_id = Some(stored_uid);
         db_password_hash = stored_hash;
-    }
-    if db_password_hash.expose_secret() == dummy_hash.expose_secret() {
+    } else {
+        db_password_hash = dummy_hash.clone();
         tracing::debug!("Comparing against dummy hash");
     }
 
@@ -154,33 +149,14 @@ pub async fn get_stored_credentials(
     username: &str,
     conn: &DatabaseConnection,
 ) -> Result<Option<(i64, Secret<String>)>, anyhow::Error> {
-    let model = User::find()
-        .filter(user::Column::Email.eq(username))
-        .one(conn)
+    let password = orm::get_credential(username, conn)
         .await
-        .context("Failed to retrieve stored credentials")?
-        .map(|m| (m.id, Secret::new(m.password)));
+        .context("Failed to retrieve stored credentials")?;
 
-    Ok(model)
+    Ok(password)
 }
 
-#[tracing::instrument(name = "Get username", skip(conn))]
-pub async fn get_username_by_id(
-    user_id: i64,
-    conn: &DatabaseConnection,
-) -> Result<String, AuthError> {
-    let model = User::find_by_id(user_id)
-        .one(conn)
-        .await
-        .map_err(|e| {
-            AuthError::UnexpectedError(anyhow!(format!("Failed to retrieve a user record: {}", e)))
-        })?
-        .unwrap();
-
-    Ok(model.email)
-}
-
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error)]
 pub enum AuthError {
     #[error("current password does not match")]
     CurrentPasswordFail(#[source] anyhow::Error),
@@ -188,4 +164,10 @@ pub enum AuthError {
     InvalidCredentials(#[source] anyhow::Error),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
+}
+
+impl std::fmt::Debug for AuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
 }

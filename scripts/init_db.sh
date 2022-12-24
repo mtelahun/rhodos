@@ -34,19 +34,15 @@ if [[ -n $RUNNING_CONTAINER ]]; then
 fi
 
 # Launch postgres using Docker
-# Allow to skip Docker if a dockerized Postgres database is already running
-if [[ -z "${SKIP_DOCKER}" ]]
-then
-    docker run \
-        --name "postgres_$(date '+%s')" \
-        -e POSTGRES_USER=${DB_USER} \
-        -e POSTGRES_PASSWORD=${DB_PASSWORD} \
-        -e POSTGRES_DB=${DB_NAME} \
-        -p "${DB_PORT}":5432 \
-        -d postgres \
-        postgres -N 1000
-        # ^ Increased maximum number of connections for testing purposes
-fi
+docker run \
+    --name "postgres_$(date '+%s')" \
+    -e POSTGRES_USER=${DB_USER} \
+    -e POSTGRES_PASSWORD=${DB_PASSWORD} \
+    -e POSTGRES_DB=${DB_NAME} \
+    -p "${DB_PORT}":5432 \
+    -d postgres \
+    postgres -N 1000
+    # ^ Increased maximum number of connections for testing purposes
 
 # Keep pinging Postgres until it's ready to accept commands
 export PGPASSWORD="${DB_PASSWORD}"

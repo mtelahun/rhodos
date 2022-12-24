@@ -8,6 +8,7 @@ use tower_cookies::Cookies;
 use super::ResetError;
 use crate::{
     cookies::{FLASH_COOKIE, FLASH_KEY},
+    error::user_id_from_session_r,
     routes::{get_db_from_host, AppState},
 };
 
@@ -26,14 +27,7 @@ pub async fn password_reset(
         .await
         .map_err(|e| ResetError::UnexpectedError(e.into()))?;
 
-    match session.get::<i64>("user_id") {
-        Some(_) => {}
-        None => {
-            return Err(ResetError::NoSession(anyhow::anyhow!(
-                "no user_id found in session"
-            )))
-        }
-    };
+    let _user_id = user_id_from_session_r(&session).await?;
 
     let feedback_html = get_feedback_html(&cookies);
     let html_string = format!(

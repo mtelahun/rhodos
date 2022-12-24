@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use axum::{
     extract::{Host, State},
     response::Redirect,
@@ -13,6 +12,7 @@ use super::ResetError;
 use crate::{
     authentication::{change_password, AuthError},
     cookies::set_flash_cookie,
+    error::user_id_from_session_r,
     routes::{get_db_from_host, AppState},
 };
 
@@ -48,12 +48,7 @@ pub async fn change(
         ));
     }
 
-    let user_id: i64 = session.get::<i64>("user_id").unwrap_or(0);
-    if user_id == 0 {
-        return Err(ResetError::NoSession(anyhow!(
-            "no user_id found in session"
-        )));
-    }
+    let user_id = user_id_from_session_r(&session).await?;
 
     change_password(user_id, form.current_password, form.password, &conn)
         .await
