@@ -11,13 +11,20 @@ use crate::domain::UserEmail;
 use super::APP_NAME;
 
 const ENV_DBPASS: &str = "DB_PASSWORD";
+const ENV_REDIS_URI: &str = "REDIS_URI";
 
-pub fn override_db_password(global_config: &mut Settings) {
-    // Get database password from .env
+pub fn dotenv_override(global_config: &mut Settings) {
+    // Get various secrets from .env
     dotenv().ok();
 
+    // PostgreSQL database password
     if env::var(ENV_DBPASS).is_ok() && !env::var(ENV_DBPASS).unwrap().is_empty() {
         global_config.database.db_password = Secret::from(env::var(ENV_DBPASS).unwrap());
+    }
+
+    // Redis URI
+    if env::var(ENV_REDIS_URI).is_ok() && !env::var(ENV_REDIS_URI).unwrap().is_empty() {
+        global_config.server.redis_uri = Secret::from(env::var(ENV_REDIS_URI).unwrap());
     }
 }
 

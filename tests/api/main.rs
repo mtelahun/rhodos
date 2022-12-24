@@ -9,3 +9,5 @@ mod password_reset;
 mod settings;
 mod user;
 mod user_confirm;
+
+mod test_utils;

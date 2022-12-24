@@ -6,6 +6,7 @@ use axum::{
 use axum_sessions::{SameSite, SessionLayer};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
+use secrecy::ExposeSecret;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use tower_cookies::{CookieManagerLayer, Key};
@@ -16,7 +17,6 @@ pub mod content;
 pub mod health_check;
 pub mod index;
 pub mod login;
-pub mod test;
 pub mod user;
 
 use admin::dashboard::admin_dashboard;
@@ -56,10 +56,12 @@ pub async fn create_routes(
     // last seconds, at most) this is fine.
     let _ = FLASH_KEY.set(Key::from(generate_random_key(64).as_bytes()));
 
-    let session_store = RedisSessionStore::new("redis://127.0.0.1/").map_err(|e| e.to_string())?;
+    let session_store =
+        RedisSessionStore::new(global_config.server.redis_uri.expose_secret().to_string())
+            .map_err(|e| e.to_string())?;
     let session_key = [0u8; 64];
     let session_layer = SessionLayer::new(session_store, &session_key)
-        .with_cookie_domain("localhost")
+        .with_cookie_domain(global_config.server.domain.clone())
         .with_cookie_path("/")
         .with_same_site_policy(SameSite::Lax)
         .with_session_ttl(Some(std::time::Duration::from_secs(60 * 60 * 24 * 7)))
