@@ -8,6 +8,7 @@ mod m20220101_000005_create_content;
 mod m20220101_000006_create_instance;
 mod m20220101_000007_create_microblog;
 mod m20220101_000008_create_user_token;
+mod m20220101_000009_create_admin;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_000006_create_instance::Migration),
             Box::new(m20220101_000007_create_microblog::Migration),
             Box::new(m20220101_000008_create_user_token::Migration),
+            Box::new(m20220101_000009_create_admin::Migration),
         ]
     }
 }

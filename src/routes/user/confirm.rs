@@ -6,10 +6,9 @@ use axum::{
 };
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait};
 use serde::Deserialize;
-use std::sync::Arc;
 use uuid::Uuid;
 
-use super::{get_db_from_host, AppState};
+use super::super::{get_db_from_host, AppState};
 use crate::{
     entities::{prelude::*, user, user_token},
     error::error_chain_fmt,
@@ -29,7 +28,7 @@ pub struct QueryParameters {
 )]
 pub async fn confirm(
     Host(host): Host,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Query(query_params): Query<QueryParameters>,
 ) -> Result<(), TokenError> {
     let hst = host.to_string();

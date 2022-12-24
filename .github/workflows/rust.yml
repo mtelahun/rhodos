@@ -27,6 +27,10 @@ jobs:
         ports:
           - 1025:1025
           - 8025:8025
+      redis:
+        image: redis:6
+        ports:
+          - 6379:6379
     env:
       SQLX_VERSION: 0.6.2
       SQLX_FEATURES: "rustls,postgres"
@@ -104,6 +108,11 @@ jobs:
         ports:
           - 1025:1025
           - 8025:8025
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

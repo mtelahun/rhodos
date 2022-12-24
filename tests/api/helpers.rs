@@ -68,11 +68,68 @@ pub struct TestState {
     pub db_name: String,
     pub port: u16,
     pub test_user: TestUser,
+    pub api_client: reqwest::Client,
 }
 
 impl TestState {
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/dashboard", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get admin dashboard")
+    }
+
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
+    }
+
+    pub async fn get_password_reset(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/user/change-password", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get reset password")
+    }
+
+    pub async fn get_password_reset_html(&self) -> String {
+        self.get_password_reset().await.text().await.unwrap()
+    }
+
+    pub async fn post_password_reset<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/user/change-password", &self.app_address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to get reset password")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/login", self.app_address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/user/logout", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to execute logout request.")
+    }
+
     pub async fn post_user(&self, body: String) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(&format!("{}/user", self.app_address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
@@ -81,8 +138,8 @@ impl TestState {
             .expect("Failed to execute request")
     }
 
-    pub async fn content_post(&self, body: &serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+    pub async fn post_content(&self, body: &serde_json::Value) -> reqwest::Response {
+        self.api_client
             .post(&format!("{}/content", self.app_address))
             .basic_auth(
                 &self.test_user.username,
@@ -136,6 +193,17 @@ impl TestState {
 
         ConfirmationLinks { html, text }
     }
+
+    pub async fn get_login_html(&self) -> String {
+        self.api_client
+            .get(&format!("{}/login", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to execute request")
+            .text()
+            .await
+            .unwrap()
+    }
 }
 
 // Ensure that the `tracing` stack is only initialized once
@@ -179,6 +247,20 @@ pub async fn add_test_account(client: &Client, user_id: i64) -> i64 {
     res as i64
 }
 
+pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
+    assert_eq!(
+        response.status().as_u16(),
+        303,
+        "received https status code: Redirect 303"
+    );
+    assert_eq!(
+        response.headers().get("Location").unwrap(),
+        location,
+        "redirect location is: {}",
+        location
+    )
+}
+
 pub async fn spawn_app() -> TestState {
     // Initialize tracing stack
     Lazy::force(&TRACING);
@@ -213,15 +295,22 @@ pub async fn spawn_app() -> TestState {
     let port = listener.local_addr().unwrap().port();
 
     let _ = tokio::spawn(serve(router, listener));
-    let client = connect_to_db(&global_config.database.db_name.clone()).await;
+    let db_client = connect_to_db(&global_config.database.db_name.clone()).await;
+
+    let reqwest_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
+        .build()
+        .unwrap();
 
     let mut res = TestState {
         app_address: format!("http://localhost:{}", port),
         db_name: global_config.database.db_name.clone(),
         port: port,
         test_user: TestUser::generate_fake_user(),
+        api_client: reqwest_client,
     };
-    res.test_user.store(&client).await;
+    res.test_user.store(&db_client).await;
 
     res
 }

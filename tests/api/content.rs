@@ -28,7 +28,7 @@ pub async fn invalid_json_is_bad_request_422() {
 
     for (case, desc) in invalid_cases {
         // Act
-        let response = state.content_post(&case).await;
+        let response = state.post_content(&case).await;
 
         // Assert
         assert_eq!(
@@ -68,7 +68,7 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
 
     for (case, desc) in invalid_cases {
         // Act
-        let response = state.content_post(&case).await;
+        let response = state.post_content(&case).await;
 
         // Assert
         assert_eq!(
@@ -95,7 +95,7 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
             "publisher_id": account_id,
         }
     });
-    let response = state.content_post(&body).await;
+    let response = state.post_content(&body).await;
 
     // Assert
     assert_eq!(
@@ -147,7 +147,7 @@ async fn post_content_fails_if_fatal_db_err() {
             "publisher_id": account_id,
         }
     });
-    let response = state.content_post(&body).await;
+    let response = state.post_content(&body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 500)

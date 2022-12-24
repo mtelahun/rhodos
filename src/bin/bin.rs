@@ -1,15 +1,14 @@
 use std::process::ExitCode;
 
 use librhodos::serve;
-use librhodos::settings::{self, override_db_password};
+use librhodos::settings::{self, dotenv_override};
 use librhodos::startup;
 use librhodos::telemetry::{get_subscriber, init_subscriber};
-use librhodos::APP_NAME;
 
 #[tokio::main]
 async fn main() -> ExitCode {
     let subscriber = get_subscriber(
-        APP_NAME.into(),
+        "RUST_LOG".to_string(),
         "rhodos=debug,tower_http=debug".into(),
         std::io::stdout,
     );
@@ -22,7 +21,7 @@ async fn main() -> ExitCode {
         })
         .unwrap();
 
-    override_db_password(&mut global_config);
+    dotenv_override(&mut global_config);
 
     // Process command line arguments
     let args: startup::Args = startup::process_command_line();
