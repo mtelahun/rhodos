@@ -12,7 +12,7 @@ use tower_cookies::Cookies;
 
 use crate::{
     authentication::{validate_credentials, AuthError, Credentials},
-    cookies::set_flash_cookie,
+    cookies::{set_flash_cookie, FlashCookieType},
     error::{error_chain_fmt, TenantMapError},
     routes::{get_db_from_host, AppState},
 };
@@ -50,14 +50,14 @@ pub async fn login(
         .await
         .map_err(|e| match e {
             AuthError::InvalidCredentials(_) => {
-                set_flash_cookie(&cookies, "invalid_creds");
+                set_flash_cookie(&cookies, FlashCookieType::InvalidCreds);
                 LoginError::AuthError(e.into())
             }
             _ => LoginError::UnexpectedError(e.into()),
         })?;
     session.regenerate();
     session.insert("user_id", user_id).map_err(|e| {
-        set_flash_cookie(&cookies, "session_setup_error");
+        set_flash_cookie(&cookies, FlashCookieType::SessionSetupError);
         LoginError::UnexpectedError(anyhow!(e))
     })?;
 

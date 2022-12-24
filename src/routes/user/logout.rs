@@ -6,7 +6,7 @@ use axum_sessions::extractors::WritableSession;
 use tower_cookies::Cookies;
 
 use crate::{
-    cookies::set_flash_cookie,
+    cookies::{set_flash_cookie, FlashCookieType},
     error::RhodosError,
     routes::{get_db_from_host, AppState},
 };
@@ -27,6 +27,6 @@ pub async fn logout(
         .map_err(|e| RhodosError::Unexpected(anyhow::anyhow!(e)))?;
 
     session.destroy();
-    set_flash_cookie(&cookies, "logout_ok");
+    set_flash_cookie(&cookies, FlashCookieType::LogoutOk);
     Ok(Redirect::to("/login"))
 }

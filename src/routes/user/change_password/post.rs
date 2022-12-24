@@ -11,7 +11,7 @@ use tower_cookies::Cookies;
 use super::ResetError;
 use crate::{
     authentication::{change_password, AuthError},
-    cookies::set_flash_cookie,
+    cookies::{set_flash_cookie, FlashCookieType},
     error::user_id_from_session_r,
     routes::{get_db_from_host, AppState},
 };
@@ -37,12 +37,12 @@ pub async fn change(
 
     // These are obvious errors
     if form.password.expose_secret().is_empty() {
-        set_flash_cookie(&cookies, "password_reset_fail_empty");
+        set_flash_cookie(&cookies, FlashCookieType::PasswordResetEmpty);
         return Err(ResetError::EmptyPasswordFail(
             "empty password string".to_string(),
         ));
     } else if form.confirm_password.expose_secret() != form.password.expose_secret() {
-        set_flash_cookie(&cookies, "password_reset_fail_mismatch");
+        set_flash_cookie(&cookies, FlashCookieType::PasswordResetMismatch);
         return Err(ResetError::ConfirmPasswordFail(
             "new password mismatch".to_string(),
         ));
@@ -54,12 +54,12 @@ pub async fn change(
         .await
         .map_err(|e| match e {
             AuthError::CurrentPasswordFail(_) => {
-                set_flash_cookie(&cookies, "password_reset_fail_current");
+                set_flash_cookie(&cookies, FlashCookieType::PasswordResetCurrent);
                 ResetError::CurrentPasswordFail(e.to_string())
             }
             _ => ResetError::UnexpectedError(e.into()),
         })?;
 
-    set_flash_cookie(&cookies, "password_reset_ok");
+    set_flash_cookie(&cookies, FlashCookieType::PasswordResetOk);
     Ok(Redirect::to("/user/change-password"))
 }

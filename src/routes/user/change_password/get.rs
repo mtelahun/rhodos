@@ -7,7 +7,7 @@ use tower_cookies::Cookies;
 
 use super::ResetError;
 use crate::{
-    cookies::{FLASH_COOKIE, FLASH_KEY},
+    cookies::{FlashCookieType, FLASH_COOKIE, FLASH_KEY},
     error::user_id_from_session_r,
     routes::{get_db_from_host, AppState},
 };
@@ -64,13 +64,13 @@ fn get_feedback_html(cookies: &Cookies) -> String {
     let mut feedback_html = "";
     if let Some(c) = private_cookies.get(FLASH_COOKIE) {
         if c.name() == FLASH_COOKIE {
-            if c.value() == "password_reset_ok" {
+            if c.value() == FlashCookieType::PasswordResetOk.to_string() {
                 feedback_html = "<p><i>Your password has been successfully updated</i></p>"
-            } else if c.value() == "password_reset_fail_mismatch" {
+            } else if c.value() == FlashCookieType::PasswordResetMismatch.to_string() {
                 feedback_html = "<p><i>The new password and the confirmation do not match</i></p>"
-            } else if c.value() == "password_reset_fail_current" {
+            } else if c.value() == FlashCookieType::PasswordResetCurrent.to_string() {
                 feedback_html = "<p><i>Your current password does not match</i></p>"
-            } else if c.value() == "password_reset_fail_empty" {
+            } else if c.value() == FlashCookieType::PasswordResetEmpty.to_string() {
                 feedback_html = "<p><i>You didn't specify a new password</i></p>"
             }
         }
