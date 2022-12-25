@@ -8,6 +8,7 @@ pub static FLASH_KEY: OnceCell<Key> = OnceCell::new();
 
 pub const FLASH_COOKIE: &str = "_flash";
 
+#[derive(Debug)]
 pub enum FlashCookieType {
     LoginOk,
     LogoutOk,
@@ -33,7 +34,8 @@ impl fmt::Display for FlashCookieType {
         }
     }
 }
-pub fn set_flash_cookie(cookies: &Cookies, fct: FlashCookieType) {
+
+pub fn set_flash_cookie(cookies: &Cookies, fct: FlashCookieType, domain: &str) {
     let key = FLASH_KEY.get().unwrap();
     let private_cookies = cookies.private(key);
     private_cookies.add(
@@ -41,7 +43,7 @@ pub fn set_flash_cookie(cookies: &Cookies, fct: FlashCookieType) {
             .max_age(Duration::seconds(1))
             .http_only(true)
             .same_site(SameSite::Lax)
-            .domain("localhost")
+            .domain(domain.to_string())
             .path("/")
             .secure(false)
             .finish(),

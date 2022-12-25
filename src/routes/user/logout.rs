@@ -27,6 +27,6 @@ pub async fn logout(
         .map_err(|e| RhodosError::Unexpected(anyhow::anyhow!(e)))?;
 
     session.destroy();
-    set_flash_cookie(&cookies, FlashCookieType::LogoutOk);
+    set_flash_cookie(&cookies, FlashCookieType::LogoutOk, &state.domain);
     Ok(Redirect::to("/login"))
 }

@@ -50,14 +50,14 @@ pub async fn login(
         .await
         .map_err(|e| match e {
             AuthError::InvalidCredentials(_) => {
-                set_flash_cookie(&cookies, FlashCookieType::InvalidCreds);
+                set_flash_cookie(&cookies, FlashCookieType::InvalidCreds, &state.domain);
                 LoginError::AuthError(e.into())
             }
             _ => LoginError::UnexpectedError(e.into()),
         })?;
     session.regenerate();
     session.insert("user_id", user_id).map_err(|e| {
-        set_flash_cookie(&cookies, FlashCookieType::SessionSetupError);
+        set_flash_cookie(&cookies, FlashCookieType::SessionSetupError, &state.domain);
         LoginError::UnexpectedError(anyhow!(e))
     })?;
 
