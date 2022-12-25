@@ -19,7 +19,7 @@ INSERT INTO "user" (name, email, password, role, confirmed)
         'Administrator',
         'admin',
         '$argon2id$v=19$m=15000,t=2,p=1$laqlSNfx8l3DlrLRQTWgzA$qE19C+eq4KraG7HVuu9hpBR0ItqMUgeqgz5G4EPxb3E',
-        'superadmin',
+        'super_admin',
         TRUE
     )
 ;"#;

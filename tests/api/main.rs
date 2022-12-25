@@ -3,6 +3,8 @@ mod content;
 mod email_client;
 mod health_check;
 mod helpers;
+mod home_dashboard;
+mod index;
 mod login;
 mod logout;
 mod password_reset;

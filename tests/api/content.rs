@@ -1,6 +1,5 @@
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use secrecy::ExposeSecret;
 
 use crate::helpers::{assert_is_redirect_to, connect_to_db, spawn_app};
 
@@ -8,6 +7,8 @@ use crate::helpers::{assert_is_redirect_to, connect_to_db, spawn_app};
 pub async fn invalid_json_is_bad_request_422() {
     // Arrange
     let state = spawn_app().await;
+    state.login_as(&state.test_user_superadmin).await;
+
     let invalid_cases = vec![
         (
             serde_json::json!({
@@ -31,9 +32,9 @@ pub async fn invalid_json_is_bad_request_422() {
 
         // Assert
         assert_eq!(
-            422,
             response.status().as_u16(),
-            "{} returns 400 Bad Request",
+            422,
+            "{} returns 422 Bad Request",
             desc
         );
     }
@@ -65,12 +66,7 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
         ),
     ];
     // Login
-    let body = serde_json::json!({
-        "username": &state.test_user.username,
-        "password": &state.test_user.password.expose_secret()
-    });
-    let response = state.post_login(&body).await;
-    assert_is_redirect_to(&response, "/admin/dashboard");
+    state.login_as(&state.test_user_superadmin).await;
 
     for (case, desc) in invalid_cases {
         // Act
@@ -78,8 +74,8 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
 
         // Assert
         assert_eq!(
-            400,
             response.status().as_u16(),
+            400,
             "{} returns 400 Bad Request",
             desc
         );
@@ -91,14 +87,9 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
     // Arrange
     let state = spawn_app().await;
     let client = connect_to_db(&state.db_name.clone()).await;
-    let account_id = state.test_user.account_id;
+    let account_id = state.test_user_superadmin.account_id;
     // Login
-    let body = serde_json::json!({
-        "username": &state.test_user.username,
-        "password": &state.test_user.password.expose_secret()
-    });
-    let response = state.post_login(&body).await;
-    assert_is_redirect_to(&response, "/admin/dashboard");
+    state.login_as(&state.test_user_superadmin).await;
 
     // Act
     let msg = generate_random_data(500);
@@ -112,8 +103,8 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
 
     // Assert
     assert_eq!(
-        200,
         response.status().as_u16(),
+        200,
         "post data less than/equal to 500 chars returns 200 Ok"
     );
 
@@ -145,16 +136,11 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
 async fn post_content_fails_if_fatal_db_err() {
     // Arrange
     let state = spawn_app().await;
-    let client = connect_to_db(&state.db_name.clone()).await;
-    let account_id: i64 = state.test_user.account_id;
+    let account_id: i64 = state.test_user_superadmin.account_id;
     // Login
-    let body = serde_json::json!({
-        "username": &state.test_user.username,
-        "password": &state.test_user.password.expose_secret()
-    });
-    let response = state.post_login(&body).await;
-    assert_is_redirect_to(&response, "/admin/dashboard");
+    state.login_as(&state.test_user_superadmin).await;
     // Sabotage the database
+    let client = connect_to_db(&state.db_name.clone()).await;
     client
         .execute(r#"ALTER TABLE content DROP COLUMN "body";"#, &[])
         .await
@@ -177,7 +163,7 @@ async fn post_content_fails_if_fatal_db_err() {
 async fn request_missing_authorization_redirect_303() {
     // Arrange
     let state = spawn_app().await;
-    let account_id = state.test_user.account_id;
+    let account_id = state.test_user_superadmin.account_id;
 
     // Act
     let body = serde_json::json!({

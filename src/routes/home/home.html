@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8">
+        <title>Home</title>
+    </head>
+    <body>
+        <p>Welcome {user_name}({role})!</p>
+        <p>Actions:</p>
+        <ol>
+            <li><a href="/user/change-password">Change your password</a></li>
+            <li>
+                <form name="logoutForm" action="/user/logout" method="post">
+                    <input type="submit" value="Logout" />
+                </form>
+            </li>
+        </ol>
+    </body>
+</html>

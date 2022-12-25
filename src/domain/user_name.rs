@@ -1,6 +1,8 @@
+use std::fmt;
+
 use unicode_segmentation::UnicodeSegmentation;
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, PartialOrd)]
 pub struct UserName(String);
 
 impl UserName {
@@ -19,6 +21,12 @@ impl UserName {
 impl AsRef<str> for UserName {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+impl fmt::Display for UserName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -54,11 +62,21 @@ mod tests {
 
     #[test]
     fn valid_name_parsed_successfully() {
-        let name = UserName::parse("Mike Henke".to_string()).unwrap();
+        let name = UserName::parse("Ms. Jackson".to_string()).unwrap();
         assert_eq!(
             name.as_ref(),
-            "Mike Henke",
+            "Ms. Jackson",
             "valid string is parsed successfully"
         );
+    }
+
+    #[test]
+    fn correct_conversion_to_string() {
+        let user = UserName("Bonita Applebaum".to_string());
+        assert_eq!(
+            user.to_string(),
+            "Bonita Applebaum",
+            "successfull converstion FROM UserName  TO string",
+        )
     }
 }

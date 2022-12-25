@@ -1,7 +1,8 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd)]
 pub enum UserRole {
+    #[default]
     User,
     InstanceAdmin,
     TenantAdmin,

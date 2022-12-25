@@ -25,13 +25,13 @@ pub struct TestUser {
 }
 
 impl TestUser {
-    pub fn generate_fake_user() -> Self {
+    pub fn generate_fake_user(role: UserRole) -> Self {
         Self {
             user_id: 0,
             name: Name().fake(),
             username: SafeEmail().fake(),
             password: Secret::from(Uuid::new_v4().to_string()),
-            role: UserRole::SuperAdmin,
+            role,
             account_id: 0,
         }
     }
@@ -70,7 +70,8 @@ pub struct TestState {
     pub app_address: String,
     pub db_name: String,
     pub port: u16,
-    pub test_user: TestUser,
+    pub test_user_superadmin: TestUser,
+    pub test_user_user: TestUser,
     pub api_client: reqwest::Client,
 }
 
@@ -85,6 +86,17 @@ impl TestState {
 
     pub async fn get_admin_dashboard_html(&self) -> String {
         self.get_admin_dashboard().await.text().await.unwrap()
+    }
+    pub async fn get_home_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/home", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get home (/home)")
+    }
+
+    pub async fn get_home_dashboard_html(&self) -> String {
+        self.get_home_dashboard().await.text().await.unwrap()
     }
 
     pub async fn get_password_reset(&self) -> reqwest::Response {
@@ -203,6 +215,15 @@ impl TestState {
             .await
             .unwrap()
     }
+
+    pub async fn login_as(&self, user: &TestUser) {
+        let body = serde_json::json!({
+            "username": user.username,
+            "password": user.password.expose_secret()
+        });
+        let response = self.post_login(&body).await;
+        assert_is_redirect_to(&response, "/home");
+    }
 }
 
 // Ensure that the `tracing` stack is only initialized once
@@ -250,7 +271,7 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
     assert_eq!(
         response.status().as_u16(),
         303,
-        "received https status code: Redirect 303"
+        "received https status code: 303 Redirect"
     );
     assert_eq!(
         response.headers().get("Location").unwrap(),
@@ -306,10 +327,12 @@ pub async fn spawn_app() -> TestState {
         app_address: format!("http://localhost:{}", port),
         db_name: global_config.database.db_name.clone(),
         port: port,
-        test_user: TestUser::generate_fake_user(),
+        test_user_superadmin: TestUser::generate_fake_user(UserRole::SuperAdmin),
+        test_user_user: TestUser::generate_fake_user(UserRole::User),
         api_client: reqwest_client,
     };
-    res.test_user.store(&db_client).await;
+    res.test_user_superadmin.store(&db_client).await;
+    res.test_user_user.store(&db_client).await;
 
     res
 }

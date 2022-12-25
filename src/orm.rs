@@ -3,6 +3,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use secrecy::Secret;
 
 use crate::{
+    domain::{NewUser, UserEmail, UserName, UserRole},
     entities::{
         prelude::*,
         user::{self, Model as UserModel},
@@ -10,7 +11,7 @@ use crate::{
     error::error_chain_fmt,
 };
 
-#[tracing::instrument(name = "Get username", skip(conn))]
+#[tracing::instrument(name = "Get user model", skip(conn))]
 pub async fn get_user_model_by_id(
     user_id: i64,
     conn: &DatabaseConnection,
@@ -24,6 +25,28 @@ pub async fn get_user_model_by_id(
         .unwrap();
 
     Ok(model)
+}
+
+#[tracing::instrument(name = "Get ORM model", skip(conn))]
+pub async fn get_orm_model_by_id(
+    user_id: i64,
+    conn: &DatabaseConnection,
+) -> Result<NewUser, OrmError> {
+    let model = User::find_by_id(user_id)
+        .one(conn)
+        .await
+        .map_err(|e| {
+            OrmError::UnexpectedError(anyhow!(format!("Failed to retrieve a user record: {}", e)))
+        })?
+        .unwrap();
+
+    Ok(NewUser {
+        id: Some(model.id),
+        password: Some(Secret::from(model.password)),
+        name: UserName::parse(model.name).unwrap_or_default(),
+        email: UserEmail::parse(model.email).unwrap_or_default(),
+        role: UserRole::try_from(model.role).unwrap_or_default(),
+    })
 }
 
 #[tracing::instrument(name = "Get credential", skip(username, conn))]

@@ -6,7 +6,7 @@ use axum::{
     Form,
 };
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, EntityTrait, Set, TransactionTrait};
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -119,7 +119,7 @@ async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i
     let data = user::ActiveModel {
         name: Set(new_user.name.as_ref().to_string()),
         email: Set(new_user.email.as_ref().to_string()),
-        password: Set(new_user.password.expose_secret().clone()),
+        password: Set(new_user.get_password_hash_as_string()),
         role: Set(new_user.role.to_string()),
         confirmed: Set(false),
         ..Default::default()
@@ -135,10 +135,11 @@ fn parse_user(form: &InputUser) -> Result<NewUser, String> {
     let password = Secret::from(form.password.clone());
     let role = UserRole::try_from(form.role.clone())?;
     Ok(NewUser {
+        password: Some(password),
         name,
         email,
-        password,
         role,
+        ..Default::default()
     })
 }
 

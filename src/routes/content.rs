@@ -2,17 +2,17 @@ use anyhow::Context;
 use axum::{
     extract::{Host, State},
     http::StatusCode,
-    response::{IntoResponse, Redirect},
-    Json,
+    response::IntoResponse,
+    Extension, Json,
 };
-use axum_sessions::extractors::ReadableSession;
 use sea_orm::{EntityTrait, Set};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
+    domain::NewUser,
     entities::content,
-    error::{error_chain_fmt, user_id_from_session_r, SessionError, TenantMapError},
+    error::{error_chain_fmt, TenantMapError},
 };
 
 use super::{get_db_from_host, AppState};
@@ -32,7 +32,7 @@ pub struct NewPost {
 }
 #[tracing::instrument(
     name = "Post a microblog",
-    skip(session, state, body),
+    skip(state, body),
     fields(
         request_id = %Uuid::new_v4(),
         username = tracing::field::Empty,
@@ -40,7 +40,7 @@ pub struct NewPost {
     )
 )]
 pub async fn create(
-    session: ReadableSession,
+    Extension(user): Extension<NewUser>,
     Host(host): Host,
     State(state): State<AppState>,
     Json(body): Json<BodyData>,
@@ -51,7 +51,6 @@ pub async fn create(
         TenantMapError::UnexpectedError(s) => ContentError::UnexpectedError(anyhow::anyhow!(s)),
     })?;
 
-    let _user_id = user_id_from_session_r(&session).await?;
     let account_id = body.content.publisher_id;
     let new_content = body.content.text;
     if new_content.is_empty() || new_content.len() > MAX_POST_CHARS || account_id <= 0 {
@@ -74,10 +73,6 @@ pub async fn create(
 
 #[derive(thiserror::Error)]
 pub enum ContentError {
-    #[error("Authentication failed.")]
-    AuthError(#[source] anyhow::Error),
-    #[error("Invalid session")]
-    SessionError(#[from] SessionError),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
     #[error("{0}")]
@@ -87,18 +82,6 @@ pub enum ContentError {
 impl IntoResponse for ContentError {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Self::AuthError(_) => {
-                tracing::error!("failed to autheticate poster");
-                (
-                    StatusCode::UNAUTHORIZED,
-                    [("WWW-Authenticate", "Basic realm=\"publish\"")],
-                )
-                    .into_response()
-            }
-            Self::SessionError(e) => {
-                tracing::error!("failed to instantiate session: {}", e.to_string());
-                (StatusCode::from_u16(303).unwrap(), Redirect::to("/login")).into_response()
-            }
             Self::UnexpectedError(e) => {
                 tracing::info!("an unexpected error occured");
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")).into_response()

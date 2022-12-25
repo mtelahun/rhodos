@@ -1,9 +1,8 @@
 use axum::{
     extract::{Host, State},
     response::Redirect,
-    Form,
+    Extension, Form,
 };
-use axum_sessions::extractors::ReadableSession;
 use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
 use tower_cookies::Cookies;
@@ -12,7 +11,7 @@ use super::ResetError;
 use crate::{
     authentication::{change_password, AuthError},
     cookies::{set_flash_cookie, FlashCookieType},
-    error::user_id_from_session_r,
+    domain::NewUser,
     routes::{get_db_from_host, AppState},
 };
 
@@ -26,8 +25,8 @@ pub struct FormData {
 pub async fn change(
     Host(host): Host,
     State(state): State<AppState>,
+    Extension(user): Extension<NewUser>,
     cookies: Cookies,
-    session: ReadableSession,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, ResetError> {
     let hst = host.to_string();
@@ -52,7 +51,7 @@ pub async fn change(
         ));
     }
 
-    let user_id = user_id_from_session_r(&session).await?;
+    let user_id = user.id.unwrap_or_default();
 
     change_password(user_id, form.current_password, form.password, &conn)
         .await

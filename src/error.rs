@@ -2,7 +2,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
-use axum_sessions::extractors::{ReadableSession, WritableSession};
 
 #[derive(thiserror::Error)]
 pub enum RhodosError {
@@ -55,22 +54,6 @@ impl IntoResponse for SessionError {
     fn into_response(self) -> axum::response::Response {
         tracing::error!("Session error: {}", self.0.to_string());
         Redirect::to("/login").into_response()
-    }
-}
-
-#[tracing::instrument(name = "User id from session (ReadableSession)")]
-pub async fn user_id_from_session_r(session: &ReadableSession) -> Result<i64, SessionError> {
-    match session.get::<i64>("user_id") {
-        Some(user_id) => Ok(user_id),
-        None => Err(SessionError(anyhow::anyhow!("no user_id found in session"))),
-    }
-}
-
-#[tracing::instrument(name = "User id from session (WritableSession)")]
-pub async fn user_id_from_session_w(session: &WritableSession) -> Result<i64, SessionError> {
-    match session.get::<i64>("user_id") {
-        Some(user_id) => Ok(user_id),
-        None => Err(SessionError(anyhow::anyhow!("no user_id found in session"))),
     }
 }
 
