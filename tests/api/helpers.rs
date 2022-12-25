@@ -2,6 +2,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, Params, PasswordHasher};
 use fake::faker::name::fr_fr::Name;
 use fake::{faker::internet::en::SafeEmail, Fake};
+use librhodos::domain::UserRole;
 use librhodos::startup;
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
@@ -19,6 +20,7 @@ pub struct TestUser {
     pub user_id: i64,
     pub username: String,
     pub password: Secret<String>,
+    pub role: UserRole,
     pub account_id: i64,
 }
 
@@ -29,6 +31,7 @@ impl TestUser {
             name: Name().fake(),
             username: SafeEmail().fake(),
             password: Secret::from(Uuid::new_v4().to_string()),
+            role: UserRole::SuperAdmin,
             account_id: 0,
         }
     }
@@ -46,8 +49,8 @@ impl TestUser {
         .to_string();
         let uid = client
             .execute(
-                r#"INSERT INTO "user" (name, email, password, confirmed) VALUES ($1, $2, $3, $4);"#,
-                &[&self.name, &self.username, &password_hash, &false],
+                r#"INSERT INTO "user" (name, email, role, password, confirmed) VALUES ($1, $2, $3, $4, $5);"#,
+                &[&self.name, &self.username, &self.role.to_string(), &password_hash, &false],
             )
             .await
             .expect("failed to store generated test user");

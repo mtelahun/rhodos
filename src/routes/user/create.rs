@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::super::{generate_random_key, get_db_from_host, AppState};
 use crate::{
-    domain::{user_email::UserEmail, NewUser, UserName},
+    domain::{user_email::UserEmail, NewUser, UserName, UserRole},
     email_client::EmailClient,
     entities::{prelude::*, user, user_token},
     error::{error_chain_fmt, TenantMapError},
@@ -24,6 +24,7 @@ pub struct InputUser {
     name: String,
     email: String,
     password: String,
+    role: String,
 }
 
 #[tracing::instrument(
@@ -32,7 +33,7 @@ pub struct InputUser {
     fields(
         request_id = %Uuid::new_v4(),
         user_email = %form.email,
-        user_name = %form.name
+        user_name = %form.name,
     )
 )]
 pub async fn create(
@@ -49,7 +50,6 @@ pub async fn create(
     let new_user = parse_user(&form)?;
     let token = generate_random_key(25);
 
-    // Transaction: find the token, update the user, remove token
     let new_user2 = new_user.clone();
     let token2 = token.clone();
     conn.transaction::<_, (), UserError>(|txn| {
@@ -120,6 +120,7 @@ async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i
         name: Set(new_user.name.as_ref().to_string()),
         email: Set(new_user.email.as_ref().to_string()),
         password: Set(new_user.password.expose_secret().clone()),
+        role: Set(new_user.role.to_string()),
         confirmed: Set(false),
         ..Default::default()
     };
@@ -132,10 +133,12 @@ fn parse_user(form: &InputUser) -> Result<NewUser, String> {
     let name = UserName::parse(form.name.clone())?;
     let email = UserEmail::parse(form.email.clone())?;
     let password = Secret::from(form.password.clone());
+    let role = UserRole::try_from(form.role.clone())?;
     Ok(NewUser {
         name,
         email,
         password,
+        role,
     })
 }
 

@@ -47,6 +47,8 @@ async-redis-session = "0.2.2"
 axum-sessions = "0.4.1"
 async-session = "3.0.0"
 serde_json = "1.0.89"
+axum-login = "0.4.1"
+eyre = "0.6.8"
 
 [dependencies.reqwest]
 version = "0.11"

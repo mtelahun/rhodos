@@ -12,7 +12,7 @@ async fn add_user_valid_form_data_200() {
     let state = spawn_app().await;
 
     // Act
-    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a";
+    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a&role=super_admin";
     let response = state.post_user(body.to_string()).await;
 
     // Assert
@@ -29,14 +29,14 @@ async fn add_user_persists_new_user() {
     let state = spawn_app().await;
 
     // Act
-    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a";
+    let body = "name=Sonja%20Hemphill&email=sonja%40lowdelhi.example&password=a&role=super_admin";
     let _ = state.post_user(body.to_string()).await;
 
     // Assert
     let client = connect_to_db(&state.db_name).await;
     let row = client
         .query(
-            r#"SELECT name, email, confirmed FROM "user" WHERE email=$1;"#,
+            r#"SELECT name, email, confirmed, role FROM "user" WHERE email=$1;"#,
             &[&"sonja@lowdelhi.example"],
         )
         .await
@@ -46,8 +46,10 @@ async fn add_user_persists_new_user() {
     let name: &str = row[0].get(0);
     let email: &str = row[0].get(1);
     let confirmed: bool = row[0].get(2);
+    let role: &str = row[0].get(3);
     assert_eq!(name, "Sonja Hemphill");
     assert_eq!(email, "sonja@lowdelhi.example");
+    assert_eq!(role, "super_admin");
     assert!(!confirmed);
 }
 
@@ -56,13 +58,23 @@ async fn add_user_missing_form_data_400() {
     // Arrange
     let state = spawn_app().await;
     let test_cases = vec![
-        ("name=Sonja%20Hemphill&password=a", "missing email"),
-        ("email=sonja%40lowdelhi.example&password=a", "missing name"),
         (
-            "email=sonja%40lowdelhi.example&name=Sonja%20Hemphill",
+            "name=Sonja%20Hemphill&password=a&role=super_admin",
+            "missing email",
+        ),
+        (
+            "email=sonja%40lowdelhi.example&password=a&role=instance_admin",
+            "missing name",
+        ),
+        (
+            "email=sonja%40lowdelhi.example&name=Sonja%20Hemphill&role=tenant_admin",
             "missing password",
         ),
-        ("", "missing name, email, and password"),
+        (
+            "email=sonja%40lowdelhi.example&name=Sonja%20Hemphill&password=a",
+            "missing role",
+        ),
+        ("", "missing all fields"),
     ];
 
     for (invalid_data, msg_err) in test_cases {
@@ -71,8 +83,8 @@ async fn add_user_missing_form_data_400() {
 
         // Assert
         assert_eq!(
-            400,
             response.status().as_u16(),
+            400,
             "{} returns 400 Bad Client Request",
             msg_err,
         );
@@ -87,13 +99,16 @@ async fn add_user_sends_confirmation_with_link() {
     let user_name: String = Name(EN).fake();
 
     // Act
-    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
+    let post_body = format!(
+        "name={}&email={}&password=a&role=user",
+        user_name, user_email
+    );
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert
     assert_eq!(
-        200,
         response.status().as_u16(),
+        200,
         "valid form data returns 200 OK"
     );
 
@@ -127,11 +142,18 @@ async fn add_user_token_fails_if_fatal_db_err() {
         .expect("query to alter user_token table failed");
 
     // Act
-    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
+    let post_body = format!(
+        "name={}&email={}&password=a&role=tenant_admin",
+        user_name, user_email
+    );
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert
-    assert_eq!(response.status().as_u16(), 500)
+    assert_eq!(
+        response.status().as_u16(),
+        500,
+        "fatal DB error returns 500 Internal Server Error"
+    );
 }
 
 #[tokio::test]
@@ -148,7 +170,10 @@ async fn insert_user_fails_if_fatal_db_err() {
         .expect("query to alter user table failed");
 
     // Act
-    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
+    let post_body = format!(
+        "name={}&email={}&password=a&role=user",
+        user_name, user_email
+    );
     let response = state.post_user(post_body.to_string()).await;
 
     // Assert

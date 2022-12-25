@@ -14,11 +14,12 @@ impl MigrationTrait for Migration {
     // Define how to apply this migration
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-INSERT INTO "user" (name, email, password, confirmed)
+INSERT INTO "user" (name, email, password, role, confirmed)
     VALUES (
         'Administrator',
         'admin',
         '$argon2id$v=19$m=15000,t=2,p=1$laqlSNfx8l3DlrLRQTWgzA$qE19C+eq4KraG7HVuu9hpBR0ItqMUgeqgz5G4EPxb3E',
+        'superadmin',
         TRUE
     )
 ;"#;
