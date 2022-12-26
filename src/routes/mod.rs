@@ -37,7 +37,7 @@ use crate::{
     domain::UserRole,
     entities::{instance, prelude::*},
     error::TenantMapError,
-    session_state::{RequireAuth, TestUserStore},
+    session_state::{RequireAuth, SeaOrmStore},
     settings::Settings,
 };
 
@@ -68,7 +68,7 @@ pub async fn create_routes(
     let session_key = axkey.as_bytes();
 
     // let session_key = [0u8; 64];
-    let user_store = TestUserStore::new(&db);
+    let user_store = SeaOrmStore::new(&db);
     let auth_layer = AuthLayer::new(user_store, session_key);
     let session_store =
         RedisSessionStore::new(global_config.server.redis_uri.expose_secret().to_string())

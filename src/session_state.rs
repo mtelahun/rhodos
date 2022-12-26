@@ -23,22 +23,22 @@ impl AuthUser<UserRole> for AppUser {
     }
 }
 
-pub type AuthContext = axum_login::extractors::AuthContext<AppUser, TestUserStore, UserRole>;
+pub type AuthContext = axum_login::extractors::AuthContext<AppUser, SeaOrmStore, UserRole>;
 pub type RequireAuth = RequireAuthorizationLayer<AppUser, UserRole>;
 
 #[derive(Debug, Clone)]
-pub struct TestUserStore {
+pub struct SeaOrmStore {
     conn: DatabaseConnection,
 }
 
-impl TestUserStore {
+impl SeaOrmStore {
     pub fn new(conn: &DatabaseConnection) -> Self {
         Self { conn: conn.clone() }
     }
 }
 
 #[async_trait]
-impl UserStore<UserRole> for TestUserStore
+impl UserStore<UserRole> for SeaOrmStore
 where
     UserRole: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
