@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use crate::error::{error_chain_fmt, SessionError};
+use crate::error::error_chain_fmt;
 
 pub mod get;
 pub mod post;
@@ -17,8 +17,6 @@ pub enum ResetError {
     CurrentPasswordFail(String),
     #[error("new password is an empty string")]
     EmptyPasswordFail(String),
-    #[error("no session: {0}")]
-    NoSession(#[from] SessionError),
     #[error("an unexpected error occurred")]
     UnexpectedError(#[from] anyhow::Error),
 }
@@ -43,10 +41,6 @@ impl IntoResponse for ResetError {
             Self::EmptyPasswordFail(s) => {
                 tracing::error!("{s}");
                 Redirect::to("/user/change-password").into_response()
-            }
-            Self::NoSession(e) => {
-                tracing::error!("session not found: {}", e.to_string());
-                (StatusCode::from_u16(303).unwrap(), Redirect::to("/login")).into_response()
             }
             Self::UnexpectedError(e) => {
                 tracing::error!("an unexpected error occurred during password change: {e}");

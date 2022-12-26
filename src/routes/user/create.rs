@@ -6,13 +6,13 @@ use axum::{
     Form,
 };
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, EntityTrait, Set, TransactionTrait};
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use super::super::{generate_random_key, get_db_from_host, AppState};
 use crate::{
-    domain::{user_email::UserEmail, NewUser, UserName},
+    domain::{user_email::UserEmail, AppUser, UserName, UserRole},
     email_client::EmailClient,
     entities::{prelude::*, user, user_token},
     error::{error_chain_fmt, TenantMapError},
@@ -24,6 +24,7 @@ pub struct InputUser {
     name: String,
     email: String,
     password: String,
+    role: String,
 }
 
 #[tracing::instrument(
@@ -32,7 +33,7 @@ pub struct InputUser {
     fields(
         request_id = %Uuid::new_v4(),
         user_email = %form.email,
-        user_name = %form.name
+        user_name = %form.name,
     )
 )]
 pub async fn create(
@@ -49,7 +50,6 @@ pub async fn create(
     let new_user = parse_user(&form)?;
     let token = generate_random_key(25);
 
-    // Transaction: find the token, update the user, remove token
     let new_user2 = new_user.clone();
     let token2 = token.clone();
     conn.transaction::<_, (), UserError>(|txn| {
@@ -79,7 +79,7 @@ pub async fn create(
     skip(new_user, state)
 )]
 pub async fn send_confirmation_email(
-    new_user: &NewUser,
+    new_user: &AppUser,
     state: &AppState,
     token: &str,
 ) -> Result<(), EmailTokenError> {
@@ -115,11 +115,12 @@ pub async fn send_confirmation_email(
     Ok(())
 }
 
-async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i64, DbErr> {
+async fn insert_user(conn: &DatabaseTransaction, new_user: &AppUser) -> Result<i64, DbErr> {
     let data = user::ActiveModel {
         name: Set(new_user.name.as_ref().to_string()),
         email: Set(new_user.email.as_ref().to_string()),
-        password: Set(new_user.password.expose_secret().clone()),
+        password: Set(new_user.get_password_hash_as_string()),
+        role: Set(new_user.role.to_string()),
         confirmed: Set(false),
         ..Default::default()
     };
@@ -128,14 +129,17 @@ async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i
     Ok(res.last_insert_id)
 }
 
-fn parse_user(form: &InputUser) -> Result<NewUser, String> {
+fn parse_user(form: &InputUser) -> Result<AppUser, String> {
     let name = UserName::parse(form.name.clone())?;
     let email = UserEmail::parse(form.email.clone())?;
     let password = Secret::from(form.password.clone());
-    Ok(NewUser {
+    let role = UserRole::try_from(form.role.clone())?;
+    Ok(AppUser {
+        password: Some(password),
         name,
         email,
-        password,
+        role,
+        ..Default::default()
     })
 }
 

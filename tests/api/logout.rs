@@ -1,22 +1,15 @@
-use secrecy::ExposeSecret;
-
 use crate::helpers::{assert_is_redirect_to, spawn_app};
 
 #[tokio::test]
 async fn logout_clears_session() {
     // Arrange
     let state = spawn_app().await;
-    let body = serde_json::json!({
-        "username": &state.test_user.username,
-        "password": &state.test_user.password.expose_secret()
-    });
-    let response = state.post_login(&body).await;
-    assert_is_redirect_to(&response, "/admin/dashboard");
-    // follow redirect to admin dashboard
-    let html_page = state.get_admin_dashboard_html().await;
+    state.login_as(&state.test_user_superadmin).await;
+    // follow redirect to home
+    let html_page = state.get_home_dashboard_html().await;
     assert!(
-        html_page.contains(&format!("Welcome {}", state.test_user.name)),
-        "admin dashboard contains the user welcome message"
+        html_page.contains(&format!("Welcome {}", state.test_user_superadmin.name)),
+        "home dashboard contains the user welcome message"
     );
 
     // Act

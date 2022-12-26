@@ -19,6 +19,7 @@ CREATE TABLE "user" (
     name VARCHAR NOT NULL,
     email VARCHAR NOT NULL UNIQUE,
     password VARCHAR NOT NULL,
+    role VARCHAR NOT NULL,
     confirmed BOOL NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );"#;
@@ -37,7 +38,7 @@ CREATE TABLE "user" (
 
     // Define how to rollback this migration
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = r#"DROP TABLE 'user';"#;
+        let sql = r#"DROP TABLE "user";"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),

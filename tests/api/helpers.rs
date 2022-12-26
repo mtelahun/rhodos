@@ -2,6 +2,8 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, Params, PasswordHasher};
 use fake::faker::name::fr_fr::Name;
 use fake::{faker::internet::en::SafeEmail, Fake};
+use librhodos::domain::UserRole;
+use librhodos::settings::Settings;
 use librhodos::startup;
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
@@ -19,16 +21,18 @@ pub struct TestUser {
     pub user_id: i64,
     pub username: String,
     pub password: Secret<String>,
+    pub role: UserRole,
     pub account_id: i64,
 }
 
 impl TestUser {
-    pub fn generate_fake_user() -> Self {
+    pub fn generate_fake_user(role: UserRole) -> Self {
         Self {
             user_id: 0,
             name: Name().fake(),
             username: SafeEmail().fake(),
             password: Secret::from(Uuid::new_v4().to_string()),
+            role,
             account_id: 0,
         }
     }
@@ -46,8 +50,8 @@ impl TestUser {
         .to_string();
         let uid = client
             .execute(
-                r#"INSERT INTO "user" (name, email, password, confirmed) VALUES ($1, $2, $3, $4);"#,
-                &[&self.name, &self.username, &password_hash, &false],
+                r#"INSERT INTO "user" (name, email, role, password, confirmed) VALUES ($1, $2, $3, $4, $5);"#,
+                &[&self.name, &self.username, &self.role.to_string(), &password_hash, &false],
             )
             .await
             .expect("failed to store generated test user");
@@ -67,8 +71,10 @@ pub struct TestState {
     pub app_address: String,
     pub db_name: String,
     pub port: u16,
-    pub test_user: TestUser,
+    pub test_user_superadmin: TestUser,
+    pub test_user_user: TestUser,
     pub api_client: reqwest::Client,
+    pub global_config: Settings,
 }
 
 impl TestState {
@@ -82,6 +88,17 @@ impl TestState {
 
     pub async fn get_admin_dashboard_html(&self) -> String {
         self.get_admin_dashboard().await.text().await.unwrap()
+    }
+    pub async fn get_home_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/home", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get home (/home)")
+    }
+
+    pub async fn get_home_dashboard_html(&self) -> String {
+        self.get_home_dashboard().await.text().await.unwrap()
     }
 
     pub async fn get_password_reset(&self) -> reqwest::Response {
@@ -141,10 +158,6 @@ impl TestState {
     pub async fn post_content(&self, body: &serde_json::Value) -> reqwest::Response {
         self.api_client
             .post(&format!("{}/content", self.app_address))
-            .basic_auth(
-                &self.test_user.username,
-                Some(self.test_user.password.expose_secret()),
-            )
             .json(&body)
             .send()
             .await
@@ -204,6 +217,15 @@ impl TestState {
             .await
             .unwrap()
     }
+
+    pub async fn login_as(&self, user: &TestUser) {
+        let body = serde_json::json!({
+            "username": user.username,
+            "password": user.password.expose_secret()
+        });
+        let response = self.post_login(&body).await;
+        assert_is_redirect_to(&response, "/home");
+    }
 }
 
 // Ensure that the `tracing` stack is only initialized once
@@ -251,7 +273,7 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
     assert_eq!(
         response.status().as_u16(),
         303,
-        "received https status code: Redirect 303"
+        "received https status code: 303 Redirect"
     );
     assert_eq!(
         response.headers().get("Location").unwrap(),
@@ -307,10 +329,13 @@ pub async fn spawn_app() -> TestState {
         app_address: format!("http://localhost:{}", port),
         db_name: global_config.database.db_name.clone(),
         port: port,
-        test_user: TestUser::generate_fake_user(),
+        test_user_superadmin: TestUser::generate_fake_user(UserRole::SuperAdmin),
+        test_user_user: TestUser::generate_fake_user(UserRole::User),
         api_client: reqwest_client,
+        global_config: global_config,
     };
-    res.test_user.store(&db_client).await;
+    res.test_user_superadmin.store(&db_client).await;
+    res.test_user_user.store(&db_client).await;
 
     res
 }

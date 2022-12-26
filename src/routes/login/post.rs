@@ -5,7 +5,6 @@ use axum::{
     response::{IntoResponse, Redirect},
     Form,
 };
-use axum_sessions::extractors::WritableSession;
 use secrecy::Secret;
 use serde::Deserialize;
 use tower_cookies::Cookies;
@@ -14,7 +13,9 @@ use crate::{
     authentication::{validate_credentials, AuthError, Credentials},
     cookies::{set_flash_cookie, FlashCookieType},
     error::{error_chain_fmt, TenantMapError},
+    orm::get_orm_model_by_id,
     routes::{get_db_from_host, AppState},
+    session_state::AuthContext,
 };
 
 #[derive(Deserialize)]
@@ -30,8 +31,8 @@ pub struct FormData {
 pub async fn login(
     Host(host): Host,
     State(state): State<AppState>,
-    mut session: WritableSession,
     cookies: Cookies,
+    mut auth: AuthContext,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, LoginError> {
     let hst = host.to_string();
@@ -50,19 +51,20 @@ pub async fn login(
         .await
         .map_err(|e| match e {
             AuthError::InvalidCredentials(_) => {
-                set_flash_cookie(&cookies, FlashCookieType::InvalidCreds);
+                set_flash_cookie(&cookies, FlashCookieType::InvalidCreds, &state.domain);
                 LoginError::AuthError(e.into())
             }
             _ => LoginError::UnexpectedError(e.into()),
         })?;
-    session.regenerate();
-    session.insert("user_id", user_id).map_err(|e| {
-        set_flash_cookie(&cookies, FlashCookieType::SessionSetupError);
-        LoginError::UnexpectedError(anyhow!(e))
-    })?;
+
+    let orm_user = get_orm_model_by_id(user_id, &conn)
+        .await
+        .map_err(|e| LoginError::UnexpectedError(e.into()))?;
+
+    auth.login(&orm_user).await.unwrap();
 
     tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-    Ok(Redirect::to("/admin/dashboard"))
+    Ok(Redirect::to("/home"))
 }
 
 #[derive(thiserror::Error)]

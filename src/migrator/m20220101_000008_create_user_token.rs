@@ -38,7 +38,7 @@ CREATE TABLE "user_token" (
 
     // Define how to rollback this migration
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = r#"DROP TABLE 'user_token';"#;
+        let sql = r#"DROP TABLE user_token;"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),

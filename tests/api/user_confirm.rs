@@ -27,7 +27,10 @@ async fn confirmation_link_works_200() {
     let user_email: String = SafeEmail().fake();
     let user_name: String = Name(EN).fake();
 
-    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
+    let post_body = format!(
+        "name={}&email={}&password=a&role=user",
+        user_name, user_email
+    );
     let response = state.post_user(post_body.to_string()).await;
 
     assert_eq!(
@@ -66,7 +69,10 @@ async fn confirmation_link_confirms_added_user() {
     let user_name: String = Name(EN).fake();
 
     // Act
-    let post_body = format!("name={}&email={}&password=a", user_name, user_email);
+    let post_body = format!(
+        "name={}&email={}&password=a&role=instance_admin",
+        user_name, user_email
+    );
     let response = state.post_user(post_body.to_string()).await;
     assert_eq!(
         200,

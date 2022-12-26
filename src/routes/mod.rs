@@ -1,8 +1,12 @@
 use async_redis_session::RedisSessionStore;
 use axum::{
+    http::StatusCode,
+    middleware::map_response,
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     Router,
 };
+use axum_login::AuthLayer;
 use axum_sessions::{SameSite, SessionLayer};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
@@ -15,12 +19,14 @@ use tower_http::trace::TraceLayer;
 pub mod admin;
 pub mod content;
 pub mod health_check;
+pub mod home;
 pub mod index;
 pub mod login;
 pub mod user;
 
 use admin::dashboard::admin_dashboard;
 use health_check::health_check;
+use home::home;
 use index::index;
 use user::change_password::get::password_reset;
 use user::change_password::post::change;
@@ -28,8 +34,10 @@ use user::logout::logout;
 
 use crate::{
     cookies::FLASH_KEY,
+    domain::UserRole,
     entities::{instance, prelude::*},
     error::TenantMapError,
+    session_state::{RequireAuth, SeaOrmStore},
     settings::Settings,
 };
 
@@ -56,11 +64,16 @@ pub async fn create_routes(
     // last seconds, at most) this is fine.
     let _ = FLASH_KEY.set(Key::from(generate_random_key(64).as_bytes()));
 
+    let axkey = generate_random_key(64);
+    let session_key = axkey.as_bytes();
+
+    // let session_key = [0u8; 64];
+    let user_store = SeaOrmStore::new(&db);
+    let auth_layer = AuthLayer::new(user_store, session_key);
     let session_store =
         RedisSessionStore::new(global_config.server.redis_uri.expose_secret().to_string())
             .map_err(|e| e.to_string())?;
-    let session_key = [0u8; 64];
-    let session_layer = SessionLayer::new(session_store, &session_key)
+    let session_layer = SessionLayer::new(session_store, session_key)
         .with_cookie_domain(global_config.server.domain.clone())
         .with_cookie_path("/")
         .with_same_site_policy(SameSite::Lax)
@@ -75,17 +88,24 @@ pub async fn create_routes(
     };
 
     let router = Router::new()
-        .route("/", get(index))
-        .route("/admin/dashboard", get(admin_dashboard))
+        .route("/home", get(home))
         .route("/content", post(content::create))
+        .route("/user/change-password", get(password_reset).post(change))
+        .layer(RequireAuth::login_with_role(UserRole::User..))
         .route(
             "/login",
             get(login::get::login_form).post(login::post::login),
         )
-        .route("/user/change-password", get(password_reset).post(change))
         .route("/user/logout", post(logout))
+        .route(
+            "/admin/dashboard",
+            get(admin_dashboard).route_layer(RequireAuth::login_with_role(UserRole::SuperAdmin..)),
+        )
+        .layer(auth_layer)
+        .layer(map_response(redirect_to_login))
         .layer(session_layer)
         .layer(CookieManagerLayer::new())
+        .route("/", get(index))
         .route("/health_check", get(health_check))
         .route("/user", post(user::create::create))
         .route("/user/confirm", get(user::confirm::confirm))
@@ -93,6 +113,14 @@ pub async fn create_routes(
         .with_state(shared_state);
 
     Ok(router)
+}
+
+async fn redirect_to_login(response: Response) -> impl IntoResponse {
+    if response.status() == StatusCode::UNAUTHORIZED {
+        Redirect::to("/login").into_response()
+    } else {
+        response
+    }
 }
 
 pub async fn get_db_from_host(

@@ -45,6 +45,8 @@ fn get_error_html(cookies: &Cookies) -> String {
                 error_html = "<p><i>You have successfully logged out</i></p>";
             } else if c.value() == FlashCookieType::SessionSetupError.to_string() {
                 error_html = "<p><i>There was an error setting up your session</i></p>";
+            } else if c.value() == FlashCookieType::PasswordResetOk.to_string() {
+                error_html = "<p><i>Your password has been successfully updated. Please log in again.</i></p>"
             }
         }
     }
