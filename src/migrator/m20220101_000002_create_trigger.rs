@@ -36,12 +36,7 @@ $$ LANGUAGE plpgsql;"#;
     }
 
     // Define how to rollback this migration
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let sql = "DROP FUNCTION rhodos_set_updated_at";
-        let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
-        match manager.get_connection().execute(stmt).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Ok(())
     }
 }

@@ -3,6 +3,7 @@ use argon2::{Argon2, Params, PasswordHasher};
 use fake::faker::name::fr_fr::Name;
 use fake::{faker::internet::en::SafeEmail, Fake};
 use librhodos::domain::UserRole;
+use librhodos::settings::Settings;
 use librhodos::startup;
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
@@ -73,6 +74,7 @@ pub struct TestState {
     pub test_user_superadmin: TestUser,
     pub test_user_user: TestUser,
     pub api_client: reqwest::Client,
+    pub global_config: Settings,
 }
 
 impl TestState {
@@ -330,6 +332,7 @@ pub async fn spawn_app() -> TestState {
         test_user_superadmin: TestUser::generate_fake_user(UserRole::SuperAdmin),
         test_user_user: TestUser::generate_fake_user(UserRole::User),
         api_client: reqwest_client,
+        global_config: global_config,
     };
     res.test_user_superadmin.store(&db_client).await;
     res.test_user_user.store(&db_client).await;

@@ -7,6 +7,7 @@ mod home_dashboard;
 mod index;
 mod login;
 mod logout;
+mod migration;
 mod password_reset;
 mod settings;
 mod user;
