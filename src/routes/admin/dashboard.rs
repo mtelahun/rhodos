@@ -7,7 +7,7 @@ use axum::{
 use axum_macros::debug_handler;
 
 use crate::{
-    domain::NewUser,
+    domain::AppUser,
     error::{error_chain_fmt, SessionError},
     orm,
     routes::{get_db_from_host, AppState},
@@ -16,7 +16,7 @@ use crate::{
 #[tracing::instrument(name = "Admin dashboard", skip(state))]
 #[debug_handler]
 pub async fn admin_dashboard(
-    Extension(user): Extension<NewUser>,
+    Extension(user): Extension<AppUser>,
     Host(host): Host,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AdminError> {

@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::super::{generate_random_key, get_db_from_host, AppState};
 use crate::{
-    domain::{user_email::UserEmail, NewUser, UserName, UserRole},
+    domain::{user_email::UserEmail, AppUser, UserName, UserRole},
     email_client::EmailClient,
     entities::{prelude::*, user, user_token},
     error::{error_chain_fmt, TenantMapError},
@@ -79,7 +79,7 @@ pub async fn create(
     skip(new_user, state)
 )]
 pub async fn send_confirmation_email(
-    new_user: &NewUser,
+    new_user: &AppUser,
     state: &AppState,
     token: &str,
 ) -> Result<(), EmailTokenError> {
@@ -115,7 +115,7 @@ pub async fn send_confirmation_email(
     Ok(())
 }
 
-async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i64, DbErr> {
+async fn insert_user(conn: &DatabaseTransaction, new_user: &AppUser) -> Result<i64, DbErr> {
     let data = user::ActiveModel {
         name: Set(new_user.name.as_ref().to_string()),
         email: Set(new_user.email.as_ref().to_string()),
@@ -129,12 +129,12 @@ async fn insert_user(conn: &DatabaseTransaction, new_user: &NewUser) -> Result<i
     Ok(res.last_insert_id)
 }
 
-fn parse_user(form: &InputUser) -> Result<NewUser, String> {
+fn parse_user(form: &InputUser) -> Result<AppUser, String> {
     let name = UserName::parse(form.name.clone())?;
     let email = UserEmail::parse(form.email.clone())?;
     let password = Secret::from(form.password.clone());
     let role = UserRole::try_from(form.role.clone())?;
-    Ok(NewUser {
+    Ok(AppUser {
         password: Some(password),
         name,
         email,

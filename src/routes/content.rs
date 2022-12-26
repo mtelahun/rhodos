@@ -10,7 +10,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    domain::NewUser,
+    domain::AppUser,
     entities::content,
     error::{error_chain_fmt, TenantMapError},
 };
@@ -40,7 +40,7 @@ pub struct NewPost {
     )
 )]
 pub async fn create(
-    Extension(user): Extension<NewUser>,
+    Extension(user): Extension<AppUser>,
     Host(host): Host,
     State(state): State<AppState>,
     Json(body): Json<BodyData>,

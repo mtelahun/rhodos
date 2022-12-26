@@ -11,7 +11,7 @@ use super::ResetError;
 use crate::{
     authentication::{change_password, AuthError},
     cookies::{set_flash_cookie, FlashCookieType},
-    domain::NewUser,
+    domain::AppUser,
     routes::{get_db_from_host, AppState},
 };
 
@@ -25,7 +25,7 @@ pub struct FormData {
 pub async fn change(
     Host(host): Host,
     State(state): State<AppState>,
-    Extension(user): Extension<NewUser>,
+    Extension(user): Extension<AppUser>,
     cookies: Cookies,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, ResetError> {

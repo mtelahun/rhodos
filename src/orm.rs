@@ -3,7 +3,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use secrecy::Secret;
 
 use crate::{
-    domain::{NewUser, UserEmail, UserName, UserRole},
+    domain::{AppUser, UserEmail, UserName, UserRole},
     entities::{
         prelude::*,
         user::{self, Model as UserModel},
@@ -31,7 +31,7 @@ pub async fn get_user_model_by_id(
 pub async fn get_orm_model_by_id(
     user_id: i64,
     conn: &DatabaseConnection,
-) -> Result<NewUser, OrmError> {
+) -> Result<AppUser, OrmError> {
     let model = User::find_by_id(user_id)
         .one(conn)
         .await
@@ -40,7 +40,7 @@ pub async fn get_orm_model_by_id(
         })?
         .unwrap();
 
-    Ok(NewUser {
+    Ok(AppUser {
         id: Some(model.id),
         password: Some(Secret::from(model.password)),
         name: UserName::parse(model.name).unwrap_or_default(),

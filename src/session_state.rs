@@ -1,5 +1,5 @@
 use crate::{
-    domain::{NewUser, UserEmail, UserName, UserRole},
+    domain::{AppUser, UserEmail, UserName, UserRole},
     entities::prelude::User as DbUser,
 };
 use axum::async_trait;
@@ -9,7 +9,7 @@ use secrecy::Secret;
 
 type Result<T = ()> = std::result::Result<T, eyre::Error>;
 
-impl AuthUser<UserRole> for NewUser {
+impl AuthUser<UserRole> for AppUser {
     fn get_id(&self) -> String {
         format!("{}", self.id.unwrap_or_default())
     }
@@ -23,8 +23,8 @@ impl AuthUser<UserRole> for NewUser {
     }
 }
 
-pub type AuthContext = axum_login::extractors::AuthContext<NewUser, TestUserStore, UserRole>;
-pub type RequireAuth = RequireAuthorizationLayer<NewUser, UserRole>;
+pub type AuthContext = axum_login::extractors::AuthContext<AppUser, TestUserStore, UserRole>;
+pub type RequireAuth = RequireAuthorizationLayer<AppUser, UserRole>;
 
 #[derive(Debug, Clone)]
 pub struct TestUserStore {
@@ -42,13 +42,13 @@ impl UserStore<UserRole> for TestUserStore
 where
     UserRole: PartialOrd + PartialEq + Clone + Send + Sync + 'static,
 {
-    type User = NewUser;
+    type User = AppUser;
 
     async fn load_user(&self, user_id: &str) -> Result<Option<Self::User>> {
         let id = user_id.parse()?;
         let user = DbUser::find_by_id(id).one(&self.conn).await?;
         match user {
-            Some(u) => Ok(Some(NewUser {
+            Some(u) => Ok(Some(AppUser {
                 id: Some(u.id),
                 email: UserEmail::parse(u.email).unwrap_or_default(),
                 name: UserName::parse(u.name).unwrap_or_default(),

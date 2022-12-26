@@ -8,7 +8,7 @@ use tower_cookies::Cookies;
 use super::ResetError;
 use crate::{
     cookies::{FlashCookieType, FLASH_COOKIE, FLASH_KEY},
-    domain::NewUser,
+    domain::AppUser,
     routes::{get_db_from_host, AppState},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 pub async fn password_reset(
     Host(host): Host,
     State(state): State<AppState>,
-    Extension(user): Extension<NewUser>,
+    Extension(user): Extension<AppUser>,
     cookies: Cookies,
 ) -> Result<Html<String>, ResetError> {
     let hst = host.to_string();

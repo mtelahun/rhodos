@@ -1,8 +1,8 @@
 use axum::{response::Html, Extension};
 
-use crate::domain::NewUser;
+use crate::domain::AppUser;
 
-pub async fn home(Extension(user): Extension<NewUser>) -> Html<String> {
+pub async fn home(Extension(user): Extension<AppUser>) -> Html<String> {
     let user_name = user.name;
     Html(format!(
         r#"<!DOCTYPE html>
