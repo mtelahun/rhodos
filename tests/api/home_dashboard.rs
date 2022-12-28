@@ -15,3 +15,20 @@ async fn home_dashboard_contains_logout_link() {
         "The home page contains a 'Logout' link"
     );
 }
+
+#[tokio::test]
+async fn home_dashboard_contains_create_content_link() {
+    // Arrange
+    let state = spawn_app().await;
+    state.login_as(&state.test_user_user).await;
+
+    // Act
+    let page = state.get_home_dashboard_html().await;
+
+    // Assert
+    println!("html page=\n{}", page);
+    assert!(
+        page.contains(r#"<a href="/content/form">Post Content</a>"#),
+        "The home page contains a 'new post' link"
+    );
+}

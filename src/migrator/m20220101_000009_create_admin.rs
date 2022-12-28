@@ -25,6 +25,18 @@ INSERT INTO "user" (name, email, password, role, confirmed)
 ;"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
         match manager.get_connection().execute(stmt).await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        };
+
+        let sql = r#"
+INSERT INTO "account" (user_id)
+    VALUES (
+        1
+    )
+;"#;
+        let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());
+        match manager.get_connection().execute(stmt).await {
             Ok(_) => Ok(()),
             Err(e) => return Err(e),
         }

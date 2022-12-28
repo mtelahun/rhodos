@@ -89,7 +89,11 @@ pub async fn create_routes(
 
     let router = Router::new()
         .route("/home", get(home))
-        .route("/content", post(content::create))
+        .route("/content", post(content::post::create))
+        .route(
+            "/content/form",
+            get(content::get::form).post(content::post::new),
+        )
         .route("/user/change-password", get(password_reset).post(change))
         .layer(RequireAuth::login_with_role(UserRole::User..))
         .route(
