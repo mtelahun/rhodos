@@ -1,7 +1,9 @@
 use chrono::Utc;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-use crate::helpers::{assert_is_redirect_to, connect_to_db, spawn_app};
+use crate::{
+    content::generate_random_data,
+    helpers::{assert_is_redirect_to, connect_to_db, spawn_app},
+};
 
 #[tokio::test]
 pub async fn invalid_json_is_bad_request_422() {
@@ -9,22 +11,12 @@ pub async fn invalid_json_is_bad_request_422() {
     let state = spawn_app().await;
     state.login_as(&state.test_user_superadmin).await;
 
-    let invalid_cases = vec![
-        (
-            serde_json::json!({
-                "content": {}
-            }),
-            "missing content",
-        ),
-        (
-            serde_json::json!({
-                "content": {
-                    "text": "This is a post",
-                }
-            }),
-            "missing publisher",
-        ),
-    ];
+    let invalid_cases = vec![(
+        serde_json::json!({
+            "content": {}
+        }),
+        "missing content",
+    )];
 
     for (case, desc) in invalid_cases {
         // Act
@@ -45,12 +37,12 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
     // Arrange
     let state = spawn_app().await;
     let msg = generate_random_data(501);
+    state.login_as(&state.test_user_user).await;
     let invalid_cases = vec![
         (
             serde_json::json!({
                 "content": {
                     "text": "",
-                    "publisher_id": 0,
                 }
             }),
             "missing text",
@@ -59,14 +51,11 @@ pub async fn logical_error_in_json_field_is_bad_request_400() {
             serde_json::json!({
                 "content": {
                     "text": msg,
-                    "publisher_id": 0,
                 }
             }),
             "post greater than 500 chars",
         ),
     ];
-    // Login
-    state.login_as(&state.test_user_superadmin).await;
 
     for (case, desc) in invalid_cases {
         // Act
@@ -96,7 +85,6 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
     let body = serde_json::json!({
         "content": {
             "text": msg,
-            "publisher_id": account_id,
         }
     });
     let response = state.post_content(&body).await;
@@ -136,7 +124,6 @@ pub async fn happy_path_less_than_501_chars_is_ok_200() {
 async fn post_content_fails_if_fatal_db_err() {
     // Arrange
     let state = spawn_app().await;
-    let account_id: i64 = state.test_user_superadmin.account_id;
     // Login
     state.login_as(&state.test_user_superadmin).await;
     // Sabotage the database
@@ -150,7 +137,6 @@ async fn post_content_fails_if_fatal_db_err() {
     let body = serde_json::json!({
         "content": {
             "text": "This is a test.",
-            "publisher_id": account_id,
         }
     });
     let response = state.post_content(&body).await;
@@ -163,25 +149,15 @@ async fn post_content_fails_if_fatal_db_err() {
 async fn request_missing_authorization_redirect_303() {
     // Arrange
     let state = spawn_app().await;
-    let account_id = state.test_user_superadmin.account_id;
 
     // Act
     let body = serde_json::json!({
         "content": {
             "text": "This is a random thought.",
-            "publisher_id": account_id,
         }
     });
     let response = state.post_content(&body).await;
 
     // Assert
     assert_is_redirect_to(&response, "/login")
-}
-
-fn generate_random_data(len: usize) -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(len)
-        .collect()
 }

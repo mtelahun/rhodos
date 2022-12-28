@@ -48,14 +48,18 @@ impl TestUser {
         .hash_password(self.password.expose_secret().as_bytes(), &salt)
         .unwrap()
         .to_string();
-        let uid = client
+        let _res = client
             .execute(
                 r#"INSERT INTO "user" (name, email, role, password, confirmed) VALUES ($1, $2, $3, $4, $5);"#,
                 &[&self.name, &self.username, &self.role.to_string(), &password_hash, &false],
             )
             .await
             .expect("failed to store generated test user");
-        self.user_id = uid as i64;
+        let uid = client
+            .query_one(r#"SELECT id FROM "user" WHERE email=$1"#, &[&self.username])
+            .await
+            .expect("query to get user ID failed");
+        self.user_id = uid.get(0);
 
         // Create account
         self.account_id = add_test_account(client, self.user_id).await;
@@ -75,6 +79,7 @@ pub struct TestState {
     pub test_user_user: TestUser,
     pub api_client: reqwest::Client,
     pub global_config: Settings,
+    pub user_admin: TestUser,
 }
 
 impl TestState {
@@ -89,6 +94,40 @@ impl TestState {
     pub async fn get_admin_dashboard_html(&self) -> String {
         self.get_admin_dashboard().await.text().await.unwrap()
     }
+
+    pub async fn get_content_form(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/content/form", &self.app_address))
+            .send()
+            .await
+            .expect("Failed to get home (/content/form)")
+    }
+
+    pub async fn get_content_form_html(&self) -> String {
+        self.get_content_form().await.text().await.unwrap()
+    }
+
+    pub async fn post_content(&self, body: &serde_json::Value) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/content", self.app_address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
+    pub async fn post_content_form<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/content/form", self.app_address))
+            .form(&body)
+            .send()
+            .await
+            .expect("Failed to post content form")
+    }
+
     pub async fn get_home_dashboard(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/home", &self.app_address))
@@ -122,7 +161,7 @@ impl TestState {
             .form(body)
             .send()
             .await
-            .expect("Failed to get reset password")
+            .expect("Failed to post reset password")
     }
 
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
@@ -150,15 +189,6 @@ impl TestState {
             .post(&format!("{}/user", self.app_address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
-            .send()
-            .await
-            .expect("Failed to execute request")
-    }
-
-    pub async fn post_content(&self, body: &serde_json::Value) -> reqwest::Response {
-        self.api_client
-            .post(&format!("{}/content", self.app_address))
-            .json(&body)
             .send()
             .await
             .expect("Failed to execute request")
@@ -261,12 +291,19 @@ pub async fn connect_to_db(db_name: &str) -> tokio_postgres::Client {
 }
 
 pub async fn add_test_account(client: &Client, user_id: i64) -> i64 {
-    let res = client
-        .execute(r#"INSERT INTO account(user_id) VALUES($1);"#, &[&user_id])
+    let _res = client
+        .execute(
+            r#"INSERT INTO "account" (user_id) VALUES($1);"#,
+            &[&user_id],
+        )
         .await
         .expect("query to add an account failed");
+    let res = client
+        .query_one(r#"SELECT * FROM "account" WHERE user_id=$1"#, &[&user_id])
+        .await
+        .expect("query to get account id failed");
 
-    res as i64
+    res.get(0)
 }
 
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
@@ -325,17 +362,29 @@ pub async fn spawn_app() -> TestState {
         .build()
         .unwrap();
 
-    let mut res = TestState {
+    let mut test_sa = TestUser::generate_fake_user(UserRole::SuperAdmin);
+    test_sa.store(&db_client).await;
+
+    let mut test_u = TestUser::generate_fake_user(UserRole::User);
+    test_u.store(&db_client).await;
+
+    let res = TestState {
         app_address: format!("http://localhost:{}", port),
         db_name: global_config.database.db_name.clone(),
         port: port,
-        test_user_superadmin: TestUser::generate_fake_user(UserRole::SuperAdmin),
-        test_user_user: TestUser::generate_fake_user(UserRole::User),
+        test_user_superadmin: test_sa,
+        test_user_user: test_u,
+        user_admin: TestUser {
+            user_id: 1,
+            name: "Administrator".to_string(),
+            username: "admin".to_string(),
+            password: Secret::from("rhodos".to_string()),
+            role: UserRole::SuperAdmin,
+            account_id: 1,
+        },
         api_client: reqwest_client,
         global_config: global_config,
     };
-    res.test_user_superadmin.store(&db_client).await;
-    res.test_user_user.store(&db_client).await;
 
     res
 }

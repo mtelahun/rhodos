@@ -15,6 +15,7 @@ pub async fn home(Extension(user): Extension<AppUser>) -> Html<String> {
         <p>Welcome {}!</p>
         <p>Actions:</p>
         <ol>
+            <li><a href="/content/form">Post Content</a></li>
             <li><a href="/user/change-password">Change your password</a></li>
             <li>
                 <form name="logout_form" action="/user/logout" method="post">
