@@ -1,3 +1,4 @@
+use secrecy::{CloneableSecret, DebugSecret, Zeroize};
 use serde::{Deserialize, Serialize};
 
 use super::random_value::RandomValue;
@@ -34,6 +35,16 @@ impl std::default::Default for ClientSecret {
         Self::new()
     }
 }
+
+impl Zeroize for ClientSecret {
+    fn zeroize(&mut self) {
+        self.inner.zeroize();
+    }
+}
+
+impl CloneableSecret for ClientSecret {}
+
+impl DebugSecret for ClientSecret {}
 
 #[cfg(test)]
 mod tests {

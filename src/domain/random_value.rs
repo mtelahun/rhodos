@@ -1,6 +1,7 @@
+use secrecy::Zeroize;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Zeroize)]
 pub struct RandomValue<const L: usize> {
     inner: [u8; L],
 }
