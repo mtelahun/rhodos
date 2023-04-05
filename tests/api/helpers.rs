@@ -7,6 +7,7 @@ use librhodos::settings::Settings;
 use librhodos::startup;
 use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, Secret};
+use serde_json::Value;
 use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
 
@@ -255,6 +256,18 @@ impl TestState {
         });
         let response = self.post_login(&body).await;
         assert_is_redirect_to(&response, "/home");
+    }
+
+    pub async fn register_client_app(&self, form: &Value) -> reqwest::Response {
+        let response = self
+            .api_client
+            .post(&format!("{}/api/v1/apps", &self.app_address))
+            .form(&form)
+            .send()
+            .await
+            .expect("request to client api failed");
+
+        response
     }
 }
 
