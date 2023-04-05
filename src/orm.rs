@@ -1,10 +1,12 @@
 use anyhow::{anyhow, Context};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use secrecy::Secret;
+use oxide_auth::primitives::registrar::{Client, RegisteredUrl};
+use sea_orm::{ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use secrecy::{ExposeSecret, Secret};
 
 use crate::{
-    domain::{AppUser, UserEmail, UserName, UserRole},
+    domain::{AppUser, ClientId, ClientSecret, UserEmail, UserName, UserRole},
     entities::{
+        client_app,
         prelude::*,
         user::{self, Model as UserModel},
     },
@@ -76,6 +78,39 @@ pub async fn update_credential(
         .context("Failed to update user record")?;
 
     Ok(res.id)
+}
+
+pub async fn register_confidential_client(
+    client_name: &str,
+    website: &str,
+    uri: &str,
+    default_scope: &str,
+    conn: &DatabaseConnection,
+) -> Result<(ClientId, Secret<ClientSecret>), OrmError> {
+    let id = ClientId::new();
+    let secret = Secret::from(ClientSecret::new());
+
+    let client = Client::confidential(
+        id.as_str(),
+        RegisteredUrl::Semantic(uri.parse().unwrap()),
+        default_scope.parse().unwrap(),
+        secret.expose_secret().as_str().as_bytes(),
+    );
+
+    tracing::debug!("Registering confidential client: {:?}", &client);
+    let app = client_app::ActiveModel {
+        client_id: ActiveValue::Set(id.to_string()),
+        client_secret: ActiveValue::Set(Some(secret.expose_secret().to_string())),
+        name: ActiveValue::Set(Some(client_name.to_string())),
+        website: ActiveValue::Set(Some(website.to_string())),
+        ..Default::default()
+    };
+    let _ = ClientApp::insert(app)
+        .exec(conn)
+        .await
+        .map_err(|e| OrmError::UnexpectedError(anyhow!(e)))?;
+
+    Ok((id, secret.to_owned()))
 }
 
 #[derive(thiserror::Error)]

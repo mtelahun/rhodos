@@ -36,6 +36,12 @@ impl std::default::Default for ClientSecret {
     }
 }
 
+impl std::fmt::Display for ClientSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner.as_str())
+    }
+}
+
 impl Zeroize for ClientSecret {
     fn zeroize(&mut self) {
         self.inner.zeroize();
@@ -65,6 +71,12 @@ mod tests {
             str_id.len(),
             SECRETLEN,
             "length of client secret string is {SECRETLEN}"
+        );
+
+        assert_eq!(
+            id.to_string(),
+            str_id,
+            "equality of string and str versions of secret"
         );
     }
 }

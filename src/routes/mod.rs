@@ -17,11 +17,13 @@ use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::trace::TraceLayer;
 
 pub mod admin;
+pub mod api;
 pub mod content;
 pub mod health_check;
 pub mod home;
 pub mod index;
 pub mod login;
+pub mod oauth;
 pub mod user;
 
 use admin::dashboard::admin_dashboard;
@@ -110,6 +112,7 @@ pub async fn create_routes(
         .layer(session_layer)
         .layer(CookieManagerLayer::new())
         .route("/", get(index))
+        .route("/api/v1/apps", post(api::apps::create_app))
         .route("/health_check", get(health_check))
         .route("/user", post(user::create::create))
         .route("/user/confirm", get(user::confirm::confirm))

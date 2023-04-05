@@ -35,6 +35,12 @@ impl std::default::Default for ClientId {
     }
 }
 
+impl std::fmt::Display for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ClientId, IDLEN};
@@ -46,10 +52,16 @@ mod tests {
         assert!(!id.is_empty(), "is is NOT empty");
 
         let str_id = id.as_str();
-        assert_eq!(str_id.len(), IDLEN, "length of client Id string is {IDLEN}");
+        assert_eq!(str_id.len(), IDLEN, "length of client Id str is {IDLEN}");
         assert!(
             str_id.len() <= 256,
             "client Id string is less than 256 characters"
+        );
+
+        assert_eq!(
+            id.to_string(),
+            str_id,
+            "equality of string and str versions of id"
         );
     }
 }

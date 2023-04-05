@@ -53,4 +53,8 @@ async fn rollback_all_migrations_and_reapply() {
         .has_table("user_token")
         .await
         .expect("database does not have 'user_token' table"));
+    assert!(schema_manager
+        .has_table("client_app")
+        .await
+        .expect("database does not have 'client_app' table"));
 }

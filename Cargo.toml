@@ -50,6 +50,7 @@ eyre = "0.6.8"
 axum-sessions = "0.4.1"
 nanoid = "0.4.0"
 zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
+oxide-auth = "0.5.3"
 
 [dependencies.reqwest]
 version = "0.11"
