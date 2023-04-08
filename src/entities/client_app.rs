@@ -12,6 +12,7 @@ pub struct Model {
     pub client_secret: Option<String>,
     pub name: Option<String>,
     pub website: Option<String>,
+    pub encoded_client: Json,
     pub updated_at: DateTime,
 }
 

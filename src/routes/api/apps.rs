@@ -23,7 +23,7 @@ use super::ApiError;
 pub struct FormData {
     client_name: String,
     redirect_uris: String,
-    _scopes: Option<String>,
+    scopes: Option<String>,
     website: Option<String>,
 }
 
@@ -51,7 +51,7 @@ pub async fn create_app(
         &form.client_name,
         &form.website.clone().unwrap_or(String::from("")),
         &form.redirect_uris,
-        "read",
+        &form.scopes.unwrap_or(String::from("")),
         &conn,
     )
     .await

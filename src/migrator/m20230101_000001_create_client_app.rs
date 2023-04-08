@@ -20,6 +20,7 @@ CREATE TABLE "client_app" (
     client_secret VARCHAR,
     name VARCHAR,
     website VARCHAR,
+    encoded_client JSONB NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );"#;
         let stmt = Statement::from_string(manager.get_database_backend(), sql.to_owned());

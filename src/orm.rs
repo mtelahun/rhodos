@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Context};
-use oxide_auth::primitives::registrar::{Client, RegisteredUrl};
+use oxide_auth::primitives::{
+    registrar::{Argon2, Client, RegisteredUrl},
+    scope::Scope,
+};
 use sea_orm::{ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use secrecy::{ExposeSecret, Secret};
 
@@ -11,6 +14,7 @@ use crate::{
         user::{self, Model as UserModel},
     },
     error::error_chain_fmt,
+    scopes::{FOLLOW_SCOPES, GLOBAL_FOLLOW, GLOBAL_READ, GLOBAL_WRITE, READ_SCOPES, WRITE_SCOPES},
 };
 
 #[tracing::instrument(name = "Get user model", skip(conn))]
@@ -90,19 +94,29 @@ pub async fn register_confidential_client(
     let id = ClientId::new();
     let secret = Secret::from(ClientSecret::new());
 
+    let mut scopes = String::from(default_scope);
+    if scopes.is_empty() || scopes == GLOBAL_READ {
+        scopes = READ_SCOPES.join(" ");
+    } else if scopes == GLOBAL_WRITE {
+        scopes = WRITE_SCOPES.join(" ");
+    } else if scopes == GLOBAL_FOLLOW {
+        scopes = FOLLOW_SCOPES.join(" ");
+    }
     let client = Client::confidential(
         id.as_str(),
         RegisteredUrl::Semantic(uri.parse().unwrap()),
-        default_scope.parse().unwrap(),
+        scopes.parse::<Scope>().unwrap(),
         secret.expose_secret().as_str().as_bytes(),
     );
+    let encoded_client = client.encode(&Argon2::default());
 
-    tracing::debug!("Registering confidential client: {:?}", &client);
+    tracing::debug!("Registering confidential client: {client_name}");
     let app = client_app::ActiveModel {
         client_id: ActiveValue::Set(id.to_string()),
         client_secret: ActiveValue::Set(Some(secret.expose_secret().to_string())),
         name: ActiveValue::Set(Some(client_name.to_string())),
         website: ActiveValue::Set(Some(website.to_string())),
+        encoded_client: ActiveValue::Set(serde_json::json!(encoded_client)),
         ..Default::default()
     };
     let _ = ClientApp::insert(app)

@@ -1,7 +1,49 @@
+use oxide_auth::primitives::registrar::EncodedClient;
 use serde::Deserialize;
 use serde_json::Value;
+use tokio_postgres::types::Json;
+use tracing::debug;
 
 use crate::helpers::{connect_to_db, spawn_app, TestState};
+
+const READ_SCOPES: &[&str] = &[
+    "read:accounts",
+    "read:blocks",
+    "read:bookmarks",
+    "read:favourites",
+    "read:filters",
+    "read:follows",
+    "read:lists",
+    "read:mutes",
+    "read:notifications",
+    "read:search",
+    "read:statuses",
+];
+
+const WRITE_SCOPES: &[&str] = &[
+    "write:accounts",
+    "write:blocks",
+    "write:bookmarks",
+    "write:conversations",
+    "write:favourites",
+    "write:filters",
+    "write:follows",
+    "write:media",
+    "write:lists",
+    "write:mutes",
+    "write:notifications",
+    "write:reports",
+    "write:statuses",
+];
+
+const FOLLOW_SCOPES: &[&str] = &[
+    "read:blocks",
+    "write:blocks",
+    "read:follows",
+    "write:follows",
+    "read:mutes",
+    "write:mutes",
+];
 
 #[derive(Clone, Debug, Deserialize)]
 struct Application {
@@ -125,6 +167,103 @@ async fn duplicate_client_app_different_id() {
         application2.client_id, application.client_id,
         "the Ids of the two identical applications are different"
     );
+}
+
+#[tokio::test]
+async fn client_app_default_scopes() {
+    // Arrange
+    let form = serde_json::json!({
+        "client_name": "Test Harness",
+        "redirect_uris": "https://example.org/authorization",
+    });
+
+    // Act / Assert
+    common_client_app_scopes(&form, READ_SCOPES).await;
+}
+
+#[tokio::test]
+async fn client_app_read_scopes() {
+    // Arrange
+    let form = serde_json::json!({
+        "client_name": "Test Harness",
+        "redirect_uris": "https://example.org/authorization",
+        "scopes": "read",
+    });
+
+    // Act / Assert
+    common_client_app_scopes(&form, READ_SCOPES).await;
+}
+
+#[tokio::test]
+async fn client_app_write_scopes() {
+    // Arrange
+    let form = serde_json::json!({
+        "client_name": "Test Harness",
+        "redirect_uris": "https://example.org/authorization",
+        "scopes": "write",
+    });
+
+    // Act / Assert
+    common_client_app_scopes(&form, WRITE_SCOPES).await;
+}
+
+#[tokio::test]
+async fn client_app_follow_scopes() {
+    // Arrange
+    let form = serde_json::json!({
+        "client_name": "Test Harness",
+        "redirect_uris": "https://example.org/authorization",
+        "scopes": "follow",
+    });
+
+    // Act / Assert
+    common_client_app_scopes(&form, FOLLOW_SCOPES).await;
+}
+
+async fn common_client_app_scopes(form: &Value, check_scopes: &[&str]) {
+    // Arrange
+    let state = spawn_app().await;
+
+    // Act
+    let response = state.register_client_app(form).await;
+
+    // Assert - 1
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "{} returns 200 Ok",
+        "successful registration of client with default scope"
+    );
+
+    let client = connect_to_db(&state.db_name).await;
+    let row = client
+        .query(
+            r#"SELECT id, name, encoded_client
+                FROM "client_app" 
+                WHERE name=$1 
+                ORDER BY id desc 
+                LIMIT 1;"#,
+            &[&form.get("client_name").unwrap().as_str()],
+        )
+        .await
+        .expect("query to fetch row failed");
+    assert!(!row.is_empty(), "one record has been created");
+
+    // Assert - 2
+    let value = row[0].get::<_, Json<EncodedClient>>(2);
+    let str_scopes = value.0.default_scope.to_string();
+    debug!("scopes list: {}", str_scopes);
+
+    let vec_str_scopes: Vec<&str> = str_scopes.split(char::is_whitespace).collect();
+    assert_eq!(
+        vec_str_scopes.len(),
+        check_scopes.len(),
+        "the number of scopes in the client's default scope match the number in the check list"
+    );
+
+    for s in check_scopes {
+        assert!(str_scopes.contains(s), "tested scope includes {}", s);
+    }
 }
 
 async fn launch_request_check_response(state: &TestState, form: &Value, msg: &str) -> Application {
