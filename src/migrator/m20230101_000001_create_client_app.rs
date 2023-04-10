@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
 CREATE TABLE "client_app" (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     client_id VARCHAR UNIQUE NOT NULL,
-    client_secret VARCHAR,
     name VARCHAR,
     website VARCHAR,
     encoded_client JSONB NOT NULL,

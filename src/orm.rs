@@ -113,7 +113,6 @@ pub async fn register_confidential_client(
     tracing::debug!("Registering confidential client: {client_name}");
     let app = client_app::ActiveModel {
         client_id: ActiveValue::Set(id.to_string()),
-        client_secret: ActiveValue::Set(Some(secret.expose_secret().to_string())),
         name: ActiveValue::Set(Some(client_name.to_string())),
         website: ActiveValue::Set(Some(website.to_string())),
         encoded_client: ActiveValue::Set(serde_json::json!(encoded_client)),

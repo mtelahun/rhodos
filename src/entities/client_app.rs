@@ -9,7 +9,6 @@ pub struct Model {
     pub id: i64,
     #[sea_orm(unique)]
     pub client_id: String,
-    pub client_secret: Option<String>,
     pub name: Option<String>,
     pub website: Option<String>,
     pub encoded_client: Json,

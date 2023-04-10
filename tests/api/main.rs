@@ -9,7 +9,6 @@ mod login;
 mod logout;
 mod mastodon_api;
 mod migration;
-mod oauth;
 mod password_reset;
 mod settings;
 mod user;
