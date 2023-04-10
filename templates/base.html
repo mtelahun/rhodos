@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% endblock %} - Axum OAuth</title>
+    <base href="/oauth/">
+    <meta name="description" content="OAuth backend.">
+    <link rel="shortcut icon" href="/assets/favicon.ico">
+
+    <!-- Pico.css -->
+    <link rel="stylesheet" href="/assets/pico.min.css">
+  </head>
+
+  <body>
+
+    <!-- Nav -->
+    <nav class="container-fluid">
+      <ul>
+        <li><a href="" class="contrast" ><strong>Axum OAuth Backend</strong></a></li>
+      </ul>
+      <ul>
+        <li><a href="signout" class="contrast">Signout</a></li>
+      </ul>
+    </nav>
+		<!-- ./ Nav -->
+
+    <!-- Main -->
+    <main class="container">
+			{% block content %}{% endblock %}
+    </main>
+		<!-- ./ Main -->
+
+  </body>
+</html>

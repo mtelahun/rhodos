@@ -12,6 +12,7 @@ pub mod entities;
 pub mod error;
 pub mod migration;
 pub mod migrator;
+pub mod oauth;
 pub mod orm;
 pub mod routes;
 pub mod scopes;

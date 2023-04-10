@@ -23,7 +23,6 @@ pub mod health_check;
 pub mod home;
 pub mod index;
 pub mod login;
-pub mod oauth;
 pub mod user;
 
 use admin::dashboard::admin_dashboard;
