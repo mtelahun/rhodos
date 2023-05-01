@@ -2,6 +2,7 @@
 
 pub use super::account::Entity as Account;
 pub use super::client_app::Entity as ClientApp;
+pub use super::client_authorization::Entity as ClientAuthorization;
 pub use super::content::Entity as Content;
 pub use super::instance::Entity as Instance;
 pub use super::microblog::Entity as Microblog;

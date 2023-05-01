@@ -22,6 +22,8 @@ pub enum Relation {
     Account,
     #[sea_orm(has_many = "super::user_token::Entity")]
     UserToken,
+    #[sea_orm(has_many = "super::client_authorization::Entity")]
+    ClientAuthorization,
 }
 
 impl Related<super::account::Entity> for Entity {
@@ -33,6 +35,12 @@ impl Related<super::account::Entity> for Entity {
 impl Related<super::user_token::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::UserToken.def()
+    }
+}
+
+impl Related<super::client_authorization::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ClientAuthorization.def()
     }
 }
 

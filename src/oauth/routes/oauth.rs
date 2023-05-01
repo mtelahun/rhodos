@@ -1,12 +1,19 @@
-use crate::oauth::{
-    database::Database, error::Error, models::ClientId, routes::session::Session,
-    solicitor::Solicitor, Consent,
+use crate::{
+    domain::{AppUser, ClientId},
+    oauth::{
+        database::{resource::user::AuthUser, Database},
+        error::Error,
+        models::UserId,
+        solicitor::Solicitor,
+        Consent,
+    },
+    orm,
 };
 use axum::{
     extract::{FromRef, Query, State},
     response::IntoResponse,
     routing::{get, post},
-    Router,
+    Extension, Router,
 };
 use oxide_auth::{
     endpoint::{OwnerConsent, PreGrant, QueryParameter, Solicitation},
@@ -30,11 +37,15 @@ where
 async fn get_authorize(
     State(state): State<crate::oauth::state::State>,
     State(db): State<Database>,
-    Session { user }: Session,
+    Extension(user): Extension<AppUser>,
     request: OAuthRequest,
 ) -> Result<impl IntoResponse, Error> {
     tracing::debug!("in get_authorize()");
     tracing::debug!("OAuth Request:\n{:?}", request);
+    let user = AuthUser {
+        user_id: UserId::from(user.id.unwrap()),
+        username: user.email.to_string(),
+    };
     state
         .endpoint()
         .await
@@ -50,7 +61,8 @@ async fn post_authorize(
     State(state): State<super::super::state::State>,
     State(db): State<Database>,
     Query(consent): Query<Consent>,
-    Session { user }: Session,
+    Extension(user): Extension<AppUser>,
+    // Session { user }: Session,
     request: OAuthRequest,
 ) -> Result<impl IntoResponse, Error> {
     tracing::debug!("in post_authorize()");
@@ -68,20 +80,15 @@ async fn post_authorize(
                     } = solicitation.pre_grant().clone();
 
                     let current_scope = futures::executor::block_on(get_current_authorization(
-                        &db,
-                        &user.username,
-                        &client_id,
+                        &db, &user, &client_id,
                     ));
                     if current_scope.is_none() || current_scope.unwrap() < scope {
                         futures::executor::block_on(update_authorization(
-                            &db,
-                            &user.username,
-                            &client_id,
-                            scope,
+                            &db, &user, &client_id, scope,
                         ));
                     }
 
-                    OwnerConsent::Authorized(user.to_string())
+                    OwnerConsent::Authorized(user.email.to_string())
                 } else {
                     OwnerConsent::Denied
                 }
@@ -142,29 +149,20 @@ async fn refresh(
 
 async fn get_current_authorization(
     db: &Database,
-    username: &str,
+    user: &AppUser,
     client_str: &str,
 ) -> Option<Scope> {
-    let user_record = db.get_user_by_name(username).await;
-    let client_id = client_str.parse::<ClientId>();
-    if user_record.is_err() || client_id.is_err() {
-        return None;
-    }
-    let user_record = user_record.unwrap();
-    let client_id = client_id.unwrap();
+    let user_id = UserId::from(user.id.unwrap());
+    let client_id = client_str.parse::<ClientId>().unwrap();
 
-    db.get_scope(user_record.id().unwrap(), client_id).await
+    match orm::get_client_authorization(user_id, client_id, db).await {
+        Ok(scope) => Some(scope),
+        Err(_) => None,
+    }
 }
 
-async fn update_authorization(db: &Database, username: &str, client_str: &str, new_scope: Scope) {
-    let user_record = db.get_user_by_name(username).await;
-    let client_id = client_str.parse::<ClientId>();
-    if user_record.is_err() || client_id.is_err() {
-        return;
-    }
-    let user_record = user_record.unwrap();
-    let client_id = client_id.unwrap();
-    let _ = db
-        .update_client_scope(user_record.id().unwrap(), client_id, new_scope)
-        .await;
+async fn update_authorization(db: &Database, user: &AppUser, client_str: &str, new_scope: Scope) {
+    let user_id = UserId::from(user.id.unwrap());
+    let client_id = client_str.parse::<ClientId>().unwrap();
+    let _ = orm::update_client_authorization(user_id, client_id, new_scope, db).await;
 }

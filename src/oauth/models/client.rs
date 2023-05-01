@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ClientId, UserId};
+use crate::domain::{ClientId, UserId};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct ClientQuery {

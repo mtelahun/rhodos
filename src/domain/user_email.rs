@@ -19,6 +19,12 @@ impl AsRef<str> for UserEmail {
     }
 }
 
+impl std::fmt::Display for UserEmail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::UserEmail;
@@ -58,6 +64,17 @@ mod tests {
         assert!(
             !UserEmail::parse(s).is_err(),
             "correctly formatted emails are parsed successfully"
+        )
+    }
+
+    #[test]
+    fn correct_conversion_to_string() {
+        let s: String = SafeEmail().fake();
+        let email = UserEmail::parse(s.clone()).unwrap();
+        assert_eq!(
+            email.to_string(),
+            s,
+            "successfull converstion FROM UserEmail TO string",
         )
     }
 }

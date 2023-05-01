@@ -1,6 +1,5 @@
 use crate::oauth::database::Database;
 use axum::{extract::FromRef, Router};
-use axum_sessions::{async_session::MemoryStore, PersistencePolicy, SameSite, SessionLayer};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -57,27 +56,26 @@ where
     Database: FromRef<S>,
     S: Send + Sync + 'static + Clone,
 {
-    let session_layer = SessionLayer::new(MemoryStore::new(), nanoid::nanoid!(128).as_bytes())
-        .with_cookie_name("axum_oauth")
-        .with_secure(true)
-        .with_persistence_policy(PersistencePolicy::ChangedOnly)
-        .with_cookie_path("/oauth/")
-        .with_same_site_policy(SameSite::Lax);
+    // let session_layer = SessionLayer::new(MemoryStore::new(), nanoid::nanoid!(128).as_bytes())
+    //     .with_cookie_name("axum_oauth")
+    //     .with_secure(true)
+    //     .with_persistence_policy(PersistencePolicy::ChangedOnly)
+    //     .with_cookie_path("/oauth/")
+    //     .with_same_site_policy(SameSite::Lax);
 
-    Router::new()
-        .merge(oauth::routes())
-        .nest("/client", client::routes())
-        .nest("/signin", signin::routes())
-        .nest("/signout", signout::routes().with_state(()))
-        .nest("/signup", signup::routes())
-        .layer(session_layer)
+    Router::new().merge(oauth::routes())
+    // .nest("/client", client::routes())
+    // .nest("/signin", signin::routes())
+    // .nest("/signout", signout::routes().with_state(()))
+    // .nest("/signup", signup::routes())
+    // .layer(session_layer)
 }
 
-mod client;
+// mod client;
 mod oauth;
-mod signin;
-mod signout;
-mod signup;
+// mod signin;
+// mod signout;
+// mod signup;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Callback<'a> {
@@ -85,9 +83,9 @@ pub struct Callback<'a> {
 }
 
 impl<'a> Callback<'a> {
-    fn as_str(&self) -> &str {
-        self.callback.as_ref()
-    }
+    // fn as_str(&self) -> &str {
+    //     self.callback.as_ref()
+    // }
 
     fn from_str(callback: &'a str) -> Self {
         Self {

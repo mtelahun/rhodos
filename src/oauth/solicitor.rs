@@ -1,12 +1,15 @@
-use crate::oauth::{
-    database::{
-        resource::{
-            client::AuthClient,
-            user::{AuthUser, Authorization},
+use crate::{
+    oauth::{
+        database::{
+            resource::{
+                client::AuthClient,
+                user::{AuthUser, Authorization},
+            },
+            Database,
         },
-        Database,
+        templates::Authorize,
     },
-    templates::Authorize,
+    orm::get_client_authorization,
 };
 use askama::Template;
 use oxide_auth::endpoint::{OwnerConsent, Solicitation, WebRequest};
@@ -40,8 +43,8 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             OwnerConsent::Error(WebError::InternalError(Some(err.to_string())))
         }
 
-        let pre_g = solicitation.pre_grant();
-        tracing::debug!("PreGrant: {:?}", pre_g);
+        let pre_grant = solicitation.pre_grant();
+        tracing::debug!("PreGrant: {:?}", pre_grant);
 
         let client_id = match solicitation
             .pre_grant()
@@ -55,8 +58,14 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
 
         // Is there already an authorization (user:client pair) ?
         //
-        let previous_scope = self.db.get_scope(self.user.user_id, client_id.id).await;
-        let authorization = previous_scope.map(|scope| Authorization { scope });
+        let authorization =
+            match get_client_authorization(self.user.user_id, client_id.id, &self.db)
+                .await
+                .map_err(map_err)
+            {
+                Ok(scope) => Some(Authorization { scope }),
+                Err(_) => None,
+            };
 
         tracing::debug!("Current scope of client: {:?}", authorization);
         tracing::debug!(
@@ -79,16 +88,10 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             Ok(name) => name,
             Err(err) => return err,
         };
-        let res = self.db.get_user_by_id(&self.user).await.map_err(map_err);
-        let user = match res {
-            Ok(user) => user,
-            Err(err) => return err,
-        };
 
         // create parameters for consent form and display it to the owner
-        if let Some((client, user)) = Some(client).zip(Some(user)) {
-            // username() is guaranteed to return a value because user was returned from the db
-            let username = user.username().unwrap();
+        if let Some((client, user)) = Some(client).zip(Some(self.user.clone())) {
+            let username = user.username;
             let body = Authorize::new(req, &solicitation, &username, &client.inner);
 
             match body.render().map_err(map_err) {

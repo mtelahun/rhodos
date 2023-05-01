@@ -277,7 +277,7 @@ async fn launch_request_check_response(state: &TestState, form: &Value, msg: &st
     let client = connect_to_db(&state.db_name).await;
     let row = client
         .query(
-            r#"SELECT id, client_id, client_secret, name, website 
+            r#"SELECT id, client_id, name, website
                 FROM "client_app" 
                 WHERE name=$1 
                 ORDER BY id desc 
@@ -289,9 +289,8 @@ async fn launch_request_check_response(state: &TestState, form: &Value, msg: &st
 
     assert!(!row.is_empty(), "one record has been created");
     let client_id: &str = row[0].get(1);
-    let client_secret: &str = row[0].get(2);
-    let name: &str = row[0].get(3);
-    let website: &str = row[0].get(4);
+    let name: &str = row[0].get(2);
+    let website: &str = row[0].get(3);
 
     // Assert - 3
     let res1 = response.text().await.expect("failed to read response");
@@ -315,11 +314,6 @@ async fn launch_request_check_response(state: &TestState, form: &Value, msg: &st
         .clone()
         .unwrap_or(String::from(""))
         .is_empty());
-    assert_eq!(
-        application.client_secret.unwrap_or(String::from("")),
-        client_secret,
-        "client secret is correct"
-    );
     if form.get("website").is_some() {
         assert_eq!(
             application.website.unwrap_or(String::from("")),

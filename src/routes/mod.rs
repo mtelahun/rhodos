@@ -1,5 +1,6 @@
 use async_redis_session::RedisSessionStore;
 use axum::{
+    extract::FromRef,
     http::StatusCode,
     middleware::map_response,
     response::{IntoResponse, Redirect, Response},
@@ -9,7 +10,9 @@ use axum::{
 use axum_login::AuthLayer;
 use axum_sessions::{SameSite, SessionLayer};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{
+    ColumnTrait, Database as SeaOrmDatabase, DatabaseConnection, EntityTrait, QueryFilter,
+};
 use secrecy::ExposeSecret;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
@@ -38,6 +41,8 @@ use crate::{
     domain::UserRole,
     entities::{instance, prelude::*},
     error::TenantMapError,
+    oauth::database::Database as AuthDatabase,
+    oauth::state::State as AuthState,
     session_state::{RequireAuth, SeaOrmStore},
     settings::Settings,
 };
@@ -48,12 +53,43 @@ pub struct TenantData {
     db: DatabaseConnection,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, axum_macros::FromRef)]
 pub struct AppState {
     domain: String,
     rhodos_db: Option<DatabaseConnection>,
     global_config: Settings,
     host_db_map: Arc<RwLock<HashMap<String, TenantData>>>,
+    state: AuthState,
+    database: Database,
+}
+
+#[derive(Clone, axum_macros::FromRef)]
+pub struct Database {
+    pub main: AppDatabase,
+    pub auth: AuthDatabase,
+}
+
+#[derive(Clone)]
+pub struct AppDatabase {
+    _inner: DatabaseConnection,
+}
+
+impl AppDatabase {
+    pub fn new(db: &DatabaseConnection) -> Self {
+        Self { _inner: db.clone() }
+    }
+}
+
+impl FromRef<AppState> for AppDatabase {
+    fn from_ref(state: &AppState) -> Self {
+        Self::from_ref(&state.database)
+    }
+}
+
+impl FromRef<AppState> for AuthDatabase {
+    fn from_ref(state: &AppState) -> Self {
+        Self::from_ref(&state.database)
+    }
 }
 
 pub async fn create_routes(
@@ -81,11 +117,20 @@ pub async fn create_routes(
         .with_session_ttl(Some(std::time::Duration::from_secs(60 * 60 * 24 * 7)))
         .with_secure(false);
 
+    let app_db = AppDatabase::new(&db);
+    let auth_db = AuthDatabase::new(&db);
+    let auth_state = AuthState::new(auth_db.clone());
+
     let shared_state = AppState {
         domain: global_config.server.domain.clone(),
         rhodos_db: Some(db),
         global_config: global_config.clone(),
         host_db_map: Arc::new(RwLock::new(HashMap::new())),
+        state: auth_state,
+        database: Database {
+            main: app_db,
+            auth: auth_db,
+        },
     };
 
     let router = Router::new()
@@ -106,6 +151,8 @@ pub async fn create_routes(
             "/admin/dashboard",
             get(admin_dashboard).route_layer(RequireAuth::login_with_role(UserRole::SuperAdmin..)),
         )
+        //.nest_service("/assets", ServeDir::new("assets"))
+        .nest("/oauth", crate::oauth::routes::routes())
         .layer(auth_layer)
         .layer(map_response(redirect_to_login))
         .layer(session_layer)
@@ -189,7 +236,7 @@ async fn map_set(
     db_url: &str,
     state: &AppState,
 ) -> Result<TenantData, TenantMapError> {
-    let db = Database::connect(db_url)
+    let db = SeaOrmDatabase::connect(db_url)
         .await
         .map_err(|e| TenantMapError::NotFound(e.to_string()))?;
 

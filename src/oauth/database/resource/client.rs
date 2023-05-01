@@ -1,7 +1,7 @@
 use oxide_auth::primitives::registrar::EncodedClient as Inner;
 use serde::{Deserialize, Serialize};
 
-use crate::oauth::models::{ClientId, InvalidLengthError};
+use crate::domain::{random_value::InvalidLengthError, ClientId};
 
 #[derive(Serialize, Deserialize)]
 pub struct EncodedClient {

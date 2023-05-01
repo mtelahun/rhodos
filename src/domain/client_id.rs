@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::random_value::RandomValue;
+use super::random_value::{InvalidLengthError, RandomValue};
 
 const IDLEN: usize = 21;
 
@@ -38,6 +38,26 @@ impl std::default::Default for ClientId {
 impl std::fmt::Display for ClientId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner.as_str())
+    }
+}
+
+impl std::str::FromStr for ClientId {
+    type Err = InvalidLengthError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        let inner: RandomValue<IDLEN> = src.parse()?;
+
+        Ok(Self { inner })
+    }
+}
+
+impl TryFrom<&[u8]> for ClientId {
+    type Error = InvalidLengthError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let inner = RandomValue::from_bytes(value)?;
+
+        Ok(Self { inner })
     }
 }
 

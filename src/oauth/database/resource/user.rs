@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::oauth::models::{InvalidLengthError, UserId};
+use crate::oauth::models::UserId;
 
 use super::client::AuthClient;
 
@@ -16,23 +16,23 @@ impl std::fmt::Display for AuthUser {
     }
 }
 
-impl std::str::FromStr for AuthUser {
-    type Err = InvalidLengthError;
+// impl std::str::FromStr for AuthUser {
+//     type Err = InvalidLengthError;
 
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let user_id = src
-            .get(0..UserId::LENGTH)
-            .ok_or(InvalidLengthError {
-                expected: UserId::LENGTH,
-                actual: src.len(),
-            })?
-            .parse()?;
+//     fn from_str(src: &str) -> Result<Self, Self::Err> {
+//         let user_id = src
+//             .get(0..UserId::LENGTH)
+//             .ok_or(InvalidLengthError {
+//                 expected: UserId::LENGTH,
+//                 actual: src.len(),
+//             })?
+//             .parse()?;
 
-        let username = src[UserId::LENGTH + 1..].to_string();
+//         let username = src[UserId::LENGTH + 1..].to_string();
 
-        Ok(Self { user_id, username })
-    }
-}
+//         Ok(Self { user_id, username })
+//     }
+// }
 
 pub struct AuthorizationQuery {
     pub user: AuthUser,

@@ -1,8 +1,11 @@
 use super::{Callback, LoginForm};
-use crate::oauth::{
-    database::{resource::user::AuthUser, Database},
-    error::{Error, Result},
-    templates::SignIn,
+use crate::{
+    authentication::Credentials,
+    oauth::{
+        database::{resource::user::AuthUser, Database},
+        error::{Error, Result},
+        templates::SignIn,
+    },
 };
 
 use axum::{
@@ -13,6 +16,7 @@ use axum::{
     Router,
 };
 use axum_sessions::extractors::WritableSession;
+use secrecy::Secret;
 
 pub fn routes<S>() -> Router<S>
 where
